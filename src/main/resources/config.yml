@@ -1,0 +1,91 @@
+# ============================================================
+#  AQIssue  ——  游戏内一键向 GitHub 仓库提交 Issue
+#  基于 Paper Dialog API，兼容 Paper 1.21.7 ~ 最新版
+#
+#  本文件只放「功能配置」。
+#  所有给玩家看的文字都在 lang.yml 里，改文案不用动这个文件。
+# ============================================================
+
+# ------------------------------------------------------------
+# 语言文件
+# ------------------------------------------------------------
+# 默认 lang.yml（简体中文）。想换文案改 lang.yml；
+# 想加别的语言就复制一份成 lang_en.yml 再改这里。
+language-file: "lang.yml"
+
+# ------------------------------------------------------------
+# GitHub 仓库与凭据
+# ------------------------------------------------------------
+github:
+  # GitHub REST API 地址，自建 GitHub Enterprise 时改成 https://git.example.com/api/v3
+  api-base: "https://api.github.com"
+
+  # 目标仓库（owner/repo）
+  owner: "MCQingYu-Team"
+  repo: "AQ-Iusse"
+
+  # 访问令牌。推荐使用 Fine-grained PAT，只授予目标仓库的 Issues: Read and write 权限。
+  # 留空则只能匿名创建 Issue（易触发限流，且私有仓库不可用）。
+  token: ""
+
+  # 自动附加到新 Issue 上的标签（标签必须已存在于仓库中，否则会被 GitHub 忽略）
+  labels:
+    - "游戏内反馈"
+
+  # 标题前缀，便于在仓库里一眼区分来源
+  title-prefix: "[游戏内] "
+
+  # 是否在 Issue 正文中附加玩家与服务器信息
+  include-player-info: true
+  include-server-info: true
+
+  # 网络超时（毫秒）
+  timeout-millis: 10000
+
+  # 代理（国内服务器访问 api.github.com 不稳定时可打开）
+  proxy:
+    enabled: false
+    host: "127.0.0.1"
+    port: 7890
+
+# ------------------------------------------------------------
+# 提交限制
+# ------------------------------------------------------------
+submit:
+  # 同一玩家的提交冷却时间（秒），0 表示不限制
+  cooldown-seconds: 300
+  # 标题长度限制（对话框直接限制输入长度）
+  min-title-length: 4
+  max-title-length: 60
+  # 正文最大长度
+  max-body-length: 800
+
+# ------------------------------------------------------------
+# 反馈分类（对话框里「反馈分类」下拉框的选项）
+# ------------------------------------------------------------
+# id        用于 /iusse submit <id> ...，也是写入 GitHub 的标签来源
+# name      下拉框中显示的名字
+# description 一句话说明，会拼在名字后面展示
+# labels    该分类额外附加的 GitHub 标签
+categories:
+  - id: "bug"
+    name: "Bug 反馈"
+    description: "报错、闪退、功能异常、卡顿"
+    labels: ["bug"]
+
+  - id: "feature"
+    name: "功能建议"
+    description: "希望服务器新增或优化的内容"
+    labels: ["enhancement"]
+
+  - id: "report"
+    name: "举报投诉"
+    description: "违规行为、玩家纠纷、管理投诉"
+    labels: ["report"]
+
+  - id: "other"
+    name: "其它问题"
+    description: "不属于以上分类的内容"
+    labels: ["question"]
+
+
