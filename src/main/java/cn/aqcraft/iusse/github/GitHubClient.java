@@ -133,7 +133,6 @@ public class GitHubClient {
         int code;
         String body = "";
         String rateRemaining = "未知";
-        Map<String, String> headers = new LinkedHashMap<String, String>();
     }
 
     private Response request(String method, String path, String jsonBody) throws IOException {
