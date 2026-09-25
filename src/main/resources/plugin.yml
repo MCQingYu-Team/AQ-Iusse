@@ -15,7 +15,8 @@ commands:
       /iusse status       查看 GitHub 连接状态
       /iusse url          查看仓库地址
       /iusse reload       重载配置（管理员）
-    aliases: [issue, gitissue, aqissue]
+    # 别名不宜用 issue 这种过于通用的名字，容易与其它插件撞车导致命令注册失败
+    aliases: [gitissue, aqissue]
     permission: aqissue.use
 
 permissions:

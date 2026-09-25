@@ -52,8 +52,10 @@ public class AqIssuePlugin extends JavaPlugin {
             IssueCommand executor = new IssueCommand(this);
             command.setExecutor(executor);
             command.setTabCompleter(executor);
+            getLogger().info("指令注册成功：/" + command.getName()
+                    + (command.getAliases().isEmpty() ? "" : "（别名 /" + String.join("、/", command.getAliases()) + "）"));
         } else {
-            getLogger().severe("无法注册指令 /iusse，请检查 plugin.yml 是否完整。");
+            getLogger().severe("无法注册指令 /iusse —— plugin.yml 里的 commands 段可能与其他插件冲突。");
         }
 
         // 每小时清理一次已过期的冷却记录
