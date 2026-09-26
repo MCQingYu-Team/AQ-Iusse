@@ -36,8 +36,8 @@
 QQ 群里收到的消息（自动 @ 提交者，并带上刚创建的 Issue 地址）：
 
 ```
-@xcbro 【Bug 反馈】服务器卡顿
-玩家：xcbro
+【Bug 反馈】[测试服] 服务器卡顿
+玩家：xcbro @164907681
 QQ：164907681
 分类：Bug 反馈
 服务端：Paper 26.2 (git-Paper-xxx)
@@ -47,6 +47,9 @@ QQ：164907681
 
 https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 ```
+
+`@164907681` 在 QQ 里会渲染成蓝色的 `@昵称`，实际拼的是 `[CQ:at,qq=164907681]`。
+因为 @ 只显示昵称看不到号码，所以下一行 `QQ：` 仍然保留数字本体。
 
 @ 需要 EasyBot 能查到该玩家绑定的 QQ（见下文「EasyBot 联动」）。
 绑定的 QQ 会出现在**所有渠道**里：GitHub Issue 的信息表、Discord 的嵌入正文、QQ 群消息。
@@ -473,8 +476,13 @@ categories:                  # 对话框里的「反馈分类」（建议 ≤ 8 
 /iusse at xcbro 你自己来看看这条反馈
 ```
 
-群消息实际发出的是 `[CQ:at,qq=164907681] 你自己来看看这条反馈` ——
-`[CQ:at,qq=...]` 是 OneBot v11 的通用写法，NapCat / Lagrange / go-cqhttp 都认。
+群消息实际发出的是（@ 拼在「玩家」那一行，和真实反馈完全一致，所以能当预览用）：
+
+```
+【AQIssue 测试】
+玩家：xcbro [CQ:at,qq=164907681]
+消息：你自己来看看这条反馈
+```
 
 > [!NOTE]
 > @ 依赖 EasyBot 查到该玩家绑定的 QQ。没绑定、EasyBot 不可用、或

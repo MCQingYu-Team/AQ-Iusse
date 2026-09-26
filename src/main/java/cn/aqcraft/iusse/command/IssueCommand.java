@@ -635,8 +635,10 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                 boolean delivered = false;
                 String failure = null;
                 if (qq > 0) {
+                    // 排成和真实反馈一样的版式，这样这条测试就能当预览用
                     // CQ 码是 OneBot 专有的，只发给 OneBot 渠道，别把 [CQ:at,...] 塞进 Discord
-                    String text = "[CQ:at,qq=" + qq + "] " + message;
+                    String text = "【AQIssue 测试】\n玩家：" + target
+                            + " [CQ:at,qq=" + qq + "]\n消息：" + message;
                     for (Channel channel : plugin.getChannelManager().getChannels()) {
                         if (!OneBotChannel.ID.equals(channel.getId())) {
                             continue;

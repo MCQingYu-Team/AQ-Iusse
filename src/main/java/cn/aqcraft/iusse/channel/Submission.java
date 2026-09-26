@@ -216,7 +216,7 @@ public class Submission {
 
     /** Discord / QQ 用的纯文本正文，末尾会带上已知链接。 */
     public String toPlainText() {
-        return toPlainText(true);
+        return toPlainText(true, "");
     }
 
     /**
@@ -225,11 +225,32 @@ public class Submission {
      * @param includeLinks 是否在末尾附上链接（QQ 需要自行控制总长度时可传 false）
      */
     public String toPlainText(boolean includeLinks) {
+        return toPlainText(includeLinks, "");
+    }
+
+    /**
+     * 纯文本正文。
+     *
+     * @param includeLinks 是否在末尾附上链接
+     * @param afterPlayer  拼在「玩家：名字」后面的内容，QQ 群的 {@code @} 码走这里；
+     *                     不需要就传空串（Discord 走的就是这条路径）。
+     *                     玩家名为空时会退化成单独一行，免得 @ 丢掉
+     */
+    public String toPlainText(boolean includeLinks, String afterPlayer) {
         StringBuilder builder = new StringBuilder();
-        if (playerName != null) {
-            builder.append("玩家：").append(playerName).append('\n');
+        boolean hasMention = afterPlayer != null && !afterPlayer.isEmpty();
+        if (playerName != null && !playerName.isEmpty()) {
+            builder.append("玩家：").append(playerName);
+            if (hasMention) {
+                builder.append(' ').append(afterPlayer);
+            }
+            builder.append('\n');
+        } else if (hasMention) {
+            // 关掉 include-player-info 时也得让 @ 有地方落
+            builder.append(afterPlayer).append('\n');
         }
         if (playerQq > 0) {
+            // QQ 里的 @ 显示成昵称、看不到号码，所以这行数字仍然要留着
             builder.append("QQ：").append(playerQq).append('\n');
         }
         builder.append("分类：").append(categoryName).append('\n');

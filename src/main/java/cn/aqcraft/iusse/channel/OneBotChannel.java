@@ -433,13 +433,13 @@ public class OneBotChannel implements Channel {
         return ChannelResult.success(this, describeSent(sentGroups, sentPrivate) + mentionNote(playerQq));
     }
 
-    /** OneBot 通用的 @ 前缀；不需要 @ 时返回空串。 */
+    /** OneBot 通用的 @ 码；不需要 @ 时返回空串。 */
     private String mention(long playerQq) {
         if (playerQq <= 0 || !config.isMentionPlayerInGroup()) {
             return "";
         }
         // CQ 码是 OneBot v11 的通用写法，NapCat / Lagrange / go-cqhttp 都认
-        return "[CQ:at,qq=" + playerQq + "] ";
+        return "[CQ:at,qq=" + playerQq + "]";
     }
 
     /** 回执里补一句「已 @ 谁」，方便管理员确认。 */
@@ -519,10 +519,9 @@ public class OneBotChannel implements Channel {
      * 拼装消息。
      * <p>
      * 正文超长时只截断正文，末尾的链接一定要保住 —— 否则玩家看不到 Issue 地址。
-     * {@code mention} 放在最前面，所以截断也不会把它切掉。
-     * 提交者的 QQ 由 {@link Submission#toPlainText()} 统一带上（Discord 也走同一条路）。
+     * 提交者的 QQ 由 {@link Submission#toPlainText(boolean, String)} 统一带上（Discord 也走同一条路）。
      *
-     * @param mention 群消息的 @ 前缀，没有则为空串
+     * @param mention 群消息的 @ 码，会拼在「玩家：名字」后面；不需要时传空串
      */
     private String buildMessage(Submission submission, String mention) {
         StringBuilder suffix = new StringBuilder();
@@ -531,7 +530,7 @@ public class OneBotChannel implements Channel {
         }
 
         String header = "【" + submission.getCategoryName() + "】" + submission.getTitle() + "\n";
-        String content = mention + header + submission.toPlainText(false);
+        String content = header + submission.toPlainText(false, mention);
 
         int budget = MAX_MESSAGE_LENGTH - suffix.length();
         if (budget < 64) {
