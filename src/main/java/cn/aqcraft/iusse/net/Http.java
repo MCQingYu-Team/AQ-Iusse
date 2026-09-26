@@ -74,6 +74,55 @@ public final class Http {
     }
 
     /**
+     * 发起 PATCH 请求（用于关闭 Issue 这类「局部修改」）。
+     * <p>
+     * {@link HttpURLConnection#setRequestMethod(String)} 只认 GET/POST/HEAD/OPTIONS/PUT/DELETE/TRACE，
+     * 遇到 PATCH 会直接抛 {@code ProtocolException: Invalid HTTP method: PATCH}，
+     * 所以这里改用 JDK 11 起自带的 {@link java.net.http.HttpClient}（同样是标准库，不引入依赖）。
+     */
+    public static Response patchJson(String url, Map<String, String> headers, String json,
+                                     int timeoutMillis, Proxy proxy) throws IOException {
+        java.net.http.HttpClient.Builder builder = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofMillis(Math.max(1000, timeoutMillis)))
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL);
+        if (proxy != null && proxy.address() instanceof java.net.InetSocketAddress) {
+            java.net.InetSocketAddress address = (java.net.InetSocketAddress) proxy.address();
+            builder.proxy(java.net.ProxySelector.of(address));
+        }
+        java.net.http.HttpClient client = builder.build();
+
+        java.net.http.HttpRequest.Builder request = java.net.http.HttpRequest.newBuilder(java.net.URI.create(url))
+                .timeout(java.time.Duration.ofMillis(Math.max(1000, timeoutMillis)))
+                .method("PATCH", java.net.http.HttpRequest.BodyPublishers.ofString(json, UTF_8));
+
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                if (entry.getKey() != null && entry.getValue() != null) {
+                    request.header(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+
+        java.net.http.HttpResponse<String> response;
+        try {
+            response = client.send(request.build(), java.net.http.HttpResponse.BodyHandlers.ofString(UTF_8));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("请求被中断", e);
+        }
+
+        Map<String, String> responseHeaders = new LinkedHashMap<String, String>();
+        for (Map.Entry<String, java.util.List<String>> entry : response.headers().map().entrySet()) {
+            if (entry.getKey() != null && entry.getValue() != null && !entry.getValue().isEmpty()) {
+                responseHeaders.put(entry.getKey().toLowerCase(), entry.getValue().get(0));
+            }
+        }
+        String remaining = responseHeaders.get("x-ratelimit-remaining");
+        return new Response(response.statusCode(), response.body(),
+                remaining == null ? "未知" : remaining, responseHeaders);
+    }
+
+    /**
      * 发起请求。
      *
      * @param jsonBody 非空时以 UTF-8 作为请求体发出，并自动补上 JSON 的 Content-Type

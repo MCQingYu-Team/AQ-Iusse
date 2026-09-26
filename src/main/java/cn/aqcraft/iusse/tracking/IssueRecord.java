@@ -29,6 +29,8 @@ public class IssueRecord {
     public boolean closed;
     /** 关闭通知是否已发给玩家（避免重启后重复通知）。 */
     public boolean closeNotified;
+    /** 检测到关闭的时间，用于统计平均处理时长；0 表示未知。 */
+    public long closedAt;
     /** 上一次 SLA 提醒时间，0 表示还没提醒过。 */
     public long lastSlaNotice;
 
@@ -55,6 +57,7 @@ public class IssueRecord {
         map.put("comment-count", commentCount);
         map.put("closed", closed);
         map.put("close-notified", closeNotified);
+        map.put("closed-at", closedAt);
         map.put("last-sla-notice", lastSlaNotice);
         return map;
     }
@@ -80,6 +83,7 @@ public class IssueRecord {
         record.commentCount = MiniJson.integer(map, "comment-count", 0);
         record.closed = Boolean.TRUE.equals(map.get("closed"));
         record.closeNotified = Boolean.TRUE.equals(map.get("close-notified"));
+        record.closedAt = MiniJson.longValue(map, "closed-at", 0L);
         record.lastSlaNotice = MiniJson.longValue(map, "last-sla-notice", 0L);
         return record;
     }

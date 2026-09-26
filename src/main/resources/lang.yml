@@ -27,6 +27,7 @@ general:
   unknown-category: "&c未知的分类：&f{id}"
   repo-not-configured: "&c服务器尚未配置目标仓库，请联系管理员。"
   no-token: "&cGitHub 渠道已启用但未配置 PAT，请联系管理员。"
+  github-unavailable: "&cGitHub 渠道当前不可用（需启用并配置 PAT），该功能暂时无法使用。"
 
 # ------------------------------------------------------------
 # 对话框（Paper Dialog API）
@@ -47,6 +48,14 @@ dialog:
   cancel-tooltip: "放弃本次提交"
   unsupported: "&c当前服务端不支持对话框功能，请用 &f/iusse submit <分类> <标题>|<内容> &c提交。"
 
+  # 提交时发现可能已有相同反馈，先让玩家确认一次
+  duplicate-title: "可能已有相同反馈"
+  duplicate-body: "已经有人提过相似的问题：\n\n#{number} {title}\n{url}\n\n如果确实是另一个问题，可以继续提交。"
+  duplicate-confirm: "仍然提交"
+  duplicate-confirm-tooltip: "忽略重复提示，继续创建新反馈"
+  duplicate-cancel: "返回"
+  duplicate-cancel-tooltip: "先去看看已有的那条反馈"
+
 # ------------------------------------------------------------
 # 提交流程
 # ------------------------------------------------------------
@@ -55,6 +64,10 @@ submit:
   title-too-short: "&c标题太短了，至少 {min} 个字。"
   title-too-long: "&c标题太长了，最多 {max} 个字。"
   body-empty: "&c内容不能为空。"
+  checking-duplicate: "&7正在检查是否已经有相似的反馈……"
+  duplicate-found: "&e发现可能重复的反馈：&f#{number} &7{title}"
+  mask-notice: "&7（检测到疑似 IP / QQ 等隐私信息，已自动打码）"
+  queue-failed: "&e已存入重发队列，稍后会自动重试，成功后另行通知你。"
   body-too-long: "&c内容太长了，最多 {max} 个字。"
   cancelled: "&7已取消本次提交。"
   submitting: "&7正在投递到各渠道，请稍候……"
@@ -69,6 +82,9 @@ submit:
 # ------------------------------------------------------------
 # {title} 反馈标题，{url} Issue 地址，{comment} 最新评论内容
 tracking:
+  # 投递失败后由重发队列补发的结果
+  notify-queued-success: "&a你之前提交的反馈已补发成功：&f{title}\n&7{url}"
+  notify-queued-dropped: "&c你之前提交的反馈重试 {attempts} 次仍未送达，已放弃：&f{title}\n&7你可以稍后用 &f/iusse &7重新提交。"
   notify-closed: "&a你提交的反馈已被处理：&f{title}\n&7{url}"
   notify-comment: "&e你提交的反馈有新回复：&f{title}\n&8{comment}\n&7{url}"
   # 下面这条会发到 QQ 群 / Discord，写纯文本（渠道不认颜色代码）
@@ -82,6 +98,81 @@ sla:
   header: "&c[反馈超时] 以下反馈已提交超过 &f{hours} &c小时仍未处理："
   line: " &7#{number} &f{title} &8({category}) &7已等待 &f{age} &7小时"
   footer: "&7处理地址：&f{url}"
+
+# ------------------------------------------------------------
+# 我的反馈（/iusse mine）
+# ------------------------------------------------------------
+feedback:
+  mine-header: "&7你提交过的反馈（显示最近 {count} 条，共 {total} 条）："
+  mine-line-open: " &e#{number} &f{title} &8({category}) &7已等待 &f{age} &7小时"
+  mine-line-closed: " &a#{number} &f{title} &8({category}) &7已处理"
+  mine-empty: "&7你还没有提交过反馈。"
+  mine-hint: "&7补充说明：&f/iusse reply <编号> <内容>"
+
+# ------------------------------------------------------------
+# 回复反馈（/iusse reply）
+# ------------------------------------------------------------
+reply:
+  too-long: "&c回复内容太长了，最多 {max} 个字。"
+  sending: "&7正在把回复发送到反馈 #{number}……"
+  success: "&a已回复反馈 #{number}：&f{title}"
+  failed: "&c回复失败：{detail}"
+  not-found: "&c没有找到编号为 &f#{number} &c的反馈。"
+  not-owner: "&c你只能回复自己提交过的反馈。"
+
+# ------------------------------------------------------------
+# 管理员：反馈列表（/iusse list）
+# ------------------------------------------------------------
+list:
+  header: "&7待处理反馈（共 {total} 条，显示 {count} 条，等得最久的排最前）："
+  line: " &e#{number} &f{title} &8({category}) &7来自 &f{player} &7已等待 &f{age} &7小时"
+  line-overdue: " &c#{number} &f{title} &8({category}) &7来自 &f{player} &7&l已等待 &f{age} &7&l小时"
+  line-closed: " &a#{number} &f{title} &8({category}) &7来自 &f{player} &8[已处理]"
+  empty: "&7当前没有符合条件的反馈。"
+  hint: "&7处理：&f/iusse close <编号> [理由]"
+
+# ------------------------------------------------------------
+# 管理员：关闭反馈（/iusse close）
+# ------------------------------------------------------------
+close:
+  sending: "&7正在关闭反馈 #{number}……"
+  success: "&a已关闭反馈 #{number}，并通知了提交者。"
+  failed: "&c关闭失败：{detail}"
+  not-found: "&c没有找到编号为 &f#{number} &c的反馈。"
+
+# ------------------------------------------------------------
+# 管理员：统计（/iusse stats）
+# ------------------------------------------------------------
+stats:
+  header: "&7反馈统计（基于本地记录）："
+  line-total: " &7累计提交：&f{value} &8条"
+  line-open: " &7待处理：&f{value} &8条"
+  line-closed: " &7已处理：&f{value} &8条"
+  line-overdue: " &c已超时：&f{value} &8条"
+  line-average: " &7平均处理时长：&f{value}"
+  line-recent: " &7最近 7 天：&f{value} &8条"
+  line-queue: " &7待重发队列：&f{value} &8条"
+
+# ------------------------------------------------------------
+# 管理员：自检（/iusse test）
+# ------------------------------------------------------------
+test:
+  checking: "&7正在逐项检查 GitHub、各渠道与联动插件，请稍候……"
+  header: "&7AQIssue 自检结果："
+  ok: " &a[正常] &f{name} &7- {detail}"
+  warn: " &e[注意] &f{name} &7- {detail}"
+  fail: " &c[异常] &f{name} &7- {detail}"
+
+# ------------------------------------------------------------
+# 管理员：查询玩家 QQ（/iusse qq）
+# ------------------------------------------------------------
+qq:
+  checking: "&7正在查询 &f{player} &7绑定的 QQ……"
+  easybot-missing: "&c服务器未安装或未加载 EasyBot，无法查询 QQ 绑定。"
+  unbound: "&e玩家 &f{player} &e没有绑定 QQ。"
+  bound: "&a玩家 &f{player} &a绑定的 QQ：&f{qq}"
+  sent: "&a测试私信已发送到 &f{qq}&a，去 QQ 上看看收到没有。"
+  send-failed: "&c测试私信发送失败：{detail}"
 
 # ------------------------------------------------------------
 # 连接状态 / 仓库信息
@@ -105,7 +196,15 @@ command:
     - "&8&m----------------&r &bAQIssue &8&m----------------"
     - "&f/iusse &7- 打开反馈对话框"
     - "&f/iusse submit <分类> <标题>|<内容> &7- 一行式提交"
+    - "&f/iusse mine &7- 查看我提交过的反馈"
+    - "&f/iusse reply <编号> <内容> &7- 给我的反馈补充说明"
     - "&f/iusse url &7- 查看仓库地址"
-    - "&f/iusse status &7- 查看各渠道状态"
+    - "&7—— 以下需要管理员权限 ——"
+    - "&f/iusse list [open|closed|all] &7- 列出反馈"
+    - "&f/iusse close <编号> [理由] &7- 关闭反馈并通知提交者"
+    - "&f/iusse stats &7- 反馈统计"
+    - "&f/iusse test &7- 逐项自检各个渠道"
+    - "&f/iusse qq <玩家> [测试消息] &7- 查询玩家绑定的 QQ"
+    - "&f/iusse status &7- 查看已启用渠道状态"
     - "&f/iusse reload &7- 重载配置"
     - "&8&m----------------------------------------"

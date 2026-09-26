@@ -19,9 +19,9 @@ import org.bukkit.entity.Player;
 import cn.aqcraft.iusse.AqIssuePlugin;
 import cn.aqcraft.iusse.channel.Channel;
 import cn.aqcraft.iusse.config.PluginConfig;
+import cn.aqcraft.iusse.github.GitHubApi;
 import cn.aqcraft.iusse.github.MiniJson;
 import cn.aqcraft.iusse.integration.EasyBotBridge;
-import cn.aqcraft.iusse.net.Http;
 import cn.aqcraft.iusse.util.Text;
 
 /**
@@ -50,6 +50,10 @@ public class IssueTracker {
 
     private File file;
     private int taskId = -1;
+    /** 额度不足时还需要跳过几轮，用来把轮询间隔临时放大。 */
+    private int throttleCountdown;
+    /** 额度不足的告警是否已经发过，避免每轮刷屏。 */
+    private boolean throttleWarned;
 
     public IssueTracker(AqIssuePlugin plugin) {
         this.plugin = plugin;
@@ -149,7 +153,11 @@ public class IssueTracker {
             return;
         }
         // 查询 Issue 状态必须有 GitHub 凭据
-        if (!config.isGitHubEnabled() || !config.hasToken() || !config.isRepoConfigured()) {
+        if (!plugin.getGitHubApi().isAvailable()) {
+            return;
+        }
+        // API 额度快用完了就自动降频：跳过接下来几轮，把间隔临时放大 6 倍
+        if (throttleIfNeeded(config)) {
             return;
         }
 
@@ -179,6 +187,35 @@ public class IssueTracker {
         }
     }
 
+    /**
+     * API 额度快用完时自动降低轮询频率。
+     * <p>
+     * 额度耗尽时跟踪会静默停摆（每次查询都 403），比起那样，
+     * 不如主动把间隔临时放大 6 倍，把额度留给「提交反馈」这件更要紧的事。
+     *
+     * @return true 表示本轮应当跳过
+     */
+    private boolean throttleIfNeeded(PluginConfig config) {
+        int remaining = plugin.getGitHubApi().getLastRateRemaining();
+        int threshold = config.getRateLimitThreshold();
+        if (threshold <= 0 || remaining < 0 || remaining >= threshold) {
+            throttleWarned = false;
+            throttleCountdown = 0;
+            return false;
+        }
+        if (throttleCountdown > 0) {
+            throttleCountdown--;
+            return true;
+        }
+        throttleCountdown = 5;
+        if (!throttleWarned) {
+            throttleWarned = true;
+            plugin.getLogger().warning("GitHub API 剩余额度仅 " + remaining + " 次（低于 "
+                    + threshold + "），已自动降低反馈状态轮询频率，额度恢复后自动还原。");
+        }
+        return false;
+    }
+
     /** 清理太久以前的记录，避免文件无限增长。 */
     private void purgeExpired(PluginConfig config) {
         long purgeBefore = System.currentTimeMillis() - config.getTrackingKeepDays() * 2L * DAY_MILLIS;
@@ -192,33 +229,28 @@ public class IssueTracker {
     private boolean check(IssueRecord record) {
         PluginConfig config = plugin.getPluginConfig();
 
-        Map<String, Object> json;
+        GitHubApi.IssueSummary summary;
         try {
-            Http.Response response = Http.get(issueUrl(config, record.number, ""),
-                    headers(), config.getTimeoutMillis(), config.resolveProxy());
-            if (!response.isSuccess()) {
-                plugin.getLogger().fine("查询 Issue #" + record.number + " 失败：HTTP " + response.getCode());
-                return false;
-            }
-            json = MiniJson.parseObject(response.getBody());
-        } catch (Exception e) {
-            plugin.getLogger().fine("查询 Issue #" + record.number + " 出错：" + e.getMessage());
+            summary = plugin.getGitHubApi().getIssue(record.number);
+        } catch (IOException e) {
+            plugin.getLogger().fine("查询 Issue #" + record.number + " 失败：" + e.getMessage());
+            return false;
+        }
+        if (summary.number <= 0) {
             return false;
         }
 
-        String state = MiniJson.string(json, "state");
-        int comments = MiniJson.integer(json, "comments", 0);
-
-        if ("closed".equalsIgnoreCase(state)) {
+        if (summary.isClosed()) {
             if (record.closeNotified) {
                 return false;
             }
             record.closed = true;
             record.closeNotified = true;
+            record.closedAt = System.currentTimeMillis();
             notifyPlayer(record, plugin.getLang().prefixed("tracking.notify-closed",
                     "title", record.title,
                     "url", record.url));
-            if (plugin.getPluginConfig().isTrackingAnnounceOnClose()) {
+            if (config.isTrackingAnnounceOnClose()) {
                 announceClosed(record);
             }
             return true;
@@ -226,8 +258,8 @@ public class IssueTracker {
 
         boolean changed = false;
 
-        if (comments > record.commentCount) {
-            record.commentCount = comments;
+        if (summary.comments > record.commentCount) {
+            record.commentCount = summary.comments;
             changed = true;
             if (config.isNotifyOnComment()) {
                 String comment = fetchLastComment(record.number);
@@ -246,43 +278,31 @@ public class IssueTracker {
         return changed;
     }
 
-    /** 取 Issue 的最后一条评论，形如 {@code 用户名：内容}。 */
+    /**
+     * 取 Issue 的最后一条评论，形如 {@code 用户名：内容}。
+     * <p>
+     * 返回列表按创建时间正序（GitHub 的默认顺序），所以最后一条就是最新的。
+     */
     private String fetchLastComment(int number) {
-        PluginConfig config = plugin.getPluginConfig();
         try {
-            Http.Response response = Http.get(
-                    issueUrl(config, number, "/comments?per_page=100&sort=created&direction=desc"),
-                    headers(), config.getTimeoutMillis(), config.resolveProxy());
-            if (!response.isSuccess()) {
+            List<Map<String, Object>> comments = plugin.getGitHubApi().listComments(number, 100);
+            if (comments.isEmpty()) {
                 return null;
             }
-            Object parsed = MiniJson.parse(response.getBody());
-            if (!(parsed instanceof List)) {
+            Map<String, Object> last = comments.get(comments.size() - 1);
+            String body = MiniJson.string(last, "body");
+            if (body == null || body.isEmpty()) {
                 return null;
             }
-            List<?> list = (List<?>) parsed;
-            if (list.isEmpty()) {
-                return null;
-            }
-            Object last = list.get(list.size() - 1);
-            if (!(last instanceof Map)) {
-                return null;
-            }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> map = (Map<String, Object>) last;
-            String body = MiniJson.string(map, "body");
             String login = null;
-            Object user = map.get("user");
+            Object user = last.get("user");
             if (user instanceof Map) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> userMap = (Map<String, Object>) user;
                 login = MiniJson.string(userMap, "login");
             }
-            if (body == null) {
-                return null;
-            }
             return login == null || login.isEmpty() ? body : login + "：" + body;
-        } catch (Exception e) {
+        } catch (IOException e) {
             plugin.getLogger().fine("获取 Issue #" + number + " 评论失败：" + e.getMessage());
             return null;
         }
@@ -361,22 +381,77 @@ public class IssueTracker {
     }
 
     // ------------------------------------------------------------------
+    // 对外查询 / 修改
+    // ------------------------------------------------------------------
+
+    /** 全部跟踪记录（快照）。 */
+    public List<IssueRecord> all() {
+        return new ArrayList<IssueRecord>(records);
+    }
+
+    /** 按编号找一条记录，找不到返回 {@code null}。 */
+    public IssueRecord find(int number) {
+        for (IssueRecord record : records) {
+            if (record.number == number) {
+                return record;
+            }
+        }
+        return null;
+    }
+
+    /** 管理员在游戏内关闭了 Issue：先把本地状态改掉，避免下一轮轮询又通知一遍。 */
+    public void markClosedLocally(int number) {
+        IssueRecord record = find(number);
+        if (record == null) {
+            return;
+        }
+        record.closed = true;
+        record.closeNotified = true;
+        record.closedAt = System.currentTimeMillis();
+        save();
+    }
+
+    /** 玩家自己回复了 Issue：把已读评论数 +1，免得下一轮把他的回复当成新消息又推给他。 */
+    public void markRepliedLocally(int number) {
+        IssueRecord record = find(number);
+        if (record == null) {
+            return;
+        }
+        record.commentCount++;
+        save();
+    }
+
+    /** 管理员在游戏内关闭了 Issue：通知提交者，并按配置在渠道里播报。 */
+    public void announceClosedLocally(int number) {
+        IssueRecord record = find(number);
+        if (record == null) {
+            return;
+        }
+        notifyPlayer(record, plugin.getLang().prefixed("tracking.notify-closed",
+                "title", record.title,
+                "url", record.url));
+        if (plugin.getPluginConfig().isTrackingAnnounceOnClose()) {
+            announceClosed(record);
+        }
+    }
+
+    // ------------------------------------------------------------------
     // 通知玩家
     // ------------------------------------------------------------------
 
     /**
-     * 把状态变化推给提交者。
+     * 把一条消息推给指定玩家。
      * <p>
      * 顺序：玩家在线 → 游戏内消息；不在线 → 先试 QQ 私信（经 EasyBot 查绑定）；
      * 都不可用 → 排队等他上线补发。
      * <p>
-     * 本方法在轮询的异步线程上执行。
+     * 本方法可在异步线程调用（轮询、重发队列都在异步线程上跑）。
      */
-    private void notifyPlayer(IssueRecord record, String message) {
+    public void notifyPlayer(String playerUuid, String playerName, String message) {
         if (message == null || message.isEmpty()) {
             return;
         }
-        UUID uuid = parseUuid(record.playerUuid);
+        UUID uuid = parseUuid(playerUuid);
 
         Player online = uuid == null ? null : Bukkit.getPlayer(uuid);
         if (online != null && online.isOnline()) {
@@ -384,7 +459,7 @@ public class IssueTracker {
             return;
         }
 
-        if (plugin.getPluginConfig().isNotifyQqOffline() && sendByQq(record, message)) {
+        if (plugin.getPluginConfig().isNotifyQqOffline() && sendByQq(playerName, message)) {
             return;
         }
 
@@ -396,6 +471,11 @@ public class IssueTracker {
             }
             queue.add(message);
         }
+    }
+
+    /** 把状态变化推给提交者。 */
+    private void notifyPlayer(IssueRecord record, String message) {
+        notifyPlayer(record.playerUuid, record.playerName, message);
     }
 
     private void sendToPlayer(final Player player, final String message) {
@@ -410,18 +490,29 @@ public class IssueTracker {
     }
 
     /** 经 EasyBot 查到玩家绑定的 QQ，再让 OneBot 私信他。 */
-    private boolean sendByQq(IssueRecord record, String message) {
-        if (!EasyBotBridge.isAvailable()) {
+    private boolean sendByQq(String playerName, String message) {
+        return sendByQq(playerName, message, true);
+    }
+
+    /**
+     * 经 EasyBot 查到玩家绑定的 QQ，再让 OneBot 私信他。
+     *
+     * @param log 是否在成功时写日志（批量补发时为 false，避免刷屏）
+     */
+    private boolean sendByQq(String playerName, String message, boolean log) {
+        if (playerName == null || playerName.isEmpty() || !EasyBotBridge.isAvailable()) {
             return false;
         }
-        long qq = EasyBotBridge.queryQq(record.playerName);
+        long qq = EasyBotBridge.queryQq(playerName);
         if (qq <= 0) {
             return false;
         }
         for (Channel channel : plugin.getChannelManager().getChannels()) {
             try {
                 if (channel.sendPrivate(qq, message)) {
-                    plugin.getLogger().info("已通过 QQ 私信通知 " + record.playerName + "（" + qq + "）");
+                    if (log) {
+                        plugin.getLogger().info("已通过 QQ 私信通知 " + playerName + "（" + qq + "）");
+                    }
                     return true;
                 }
             } catch (Throwable throwable) {
@@ -440,25 +531,6 @@ public class IssueTracker {
         } catch (IllegalArgumentException e) {
             return null;
         }
-    }
-
-    // ------------------------------------------------------------------
-    // HTTP 辅助
-    // ------------------------------------------------------------------
-
-    private String issueUrl(PluginConfig config, int number, String suffix) {
-        return config.getApiBase() + "/repos/" + config.getOwner() + "/" + config.getRepo()
-                + "/issues/" + number + suffix;
-    }
-
-    private Map<String, String> headers() {
-        PluginConfig config = plugin.getPluginConfig();
-        Map<String, String> headers = new LinkedHashMap<String, String>();
-        headers.put("Authorization", "Bearer " + config.getToken().trim());
-        headers.put("Accept", "application/vnd.github+json");
-        headers.put("X-GitHub-Api-Version", "2022-11-28");
-        headers.put("User-Agent", "AQIssue/" + plugin.getPluginMeta().getVersion());
-        return headers;
     }
 
     // ------------------------------------------------------------------

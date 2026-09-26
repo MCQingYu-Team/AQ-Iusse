@@ -35,6 +35,8 @@ public class PluginConfig {
     private boolean proxyEnabled;
     private String proxyHost;
     private int proxyPort;
+    /** 网络抖动 / GitHub 5xx 时的重试次数。 */
+    private int retryAttempts;
 
     // 提交限制
     private int cooldownSeconds;
@@ -42,6 +44,18 @@ public class PluginConfig {
     private int minTitleLength;
     private int maxTitleLength;
     private int maxBodyLength;
+    private int maxReplyLength;
+    /** 提交前检查是否已有相似反馈。 */
+    private boolean duplicateCheck;
+    /** 判定为疑似重复的相似度阈值。 */
+    private double duplicateThreshold;
+    /** 自动给正文里的 IP / QQ 等打码。 */
+    private boolean maskSensitive;
+    /** 全部渠道失败时是否存盘等待重发。 */
+    private boolean retryQueueEnabled;
+    private int retryIntervalMinutes;
+    private int retryMaxAttempts;
+    private int retryKeepHours;
 
     // 渠道：GitHub（PAT）
     private boolean githubEnabled;
@@ -80,6 +94,8 @@ public class PluginConfig {
     private boolean slaBroadcast;
     private boolean slaNotifyGroups;
     private boolean slaNotifyPrivate;
+    /** 剩余额度低于该值时自动降低轮询频率。 */
+    private int rateLimitThreshold;
 
     // 分类
     private List<Category> categories;
@@ -107,12 +123,21 @@ public class PluginConfig {
         proxyEnabled = config.getBoolean("github.proxy.enabled", false);
         proxyHost = config.getString("github.proxy.host", "127.0.0.1");
         proxyPort = config.getInt("github.proxy.port", 7890);
+        retryAttempts = Math.max(0, config.getInt("github.retry", 2));
 
         cooldownSeconds = Math.max(0, config.getInt("submit.cooldown-seconds", 300));
         bypassPermission = config.getString("submit.bypass-permission", "aqissue.admin").trim();
         minTitleLength = Math.max(1, config.getInt("submit.min-title-length", 4));
         maxTitleLength = Math.max(minTitleLength, config.getInt("submit.max-title-length", 60));
         maxBodyLength = Math.max(16, config.getInt("submit.max-body-length", 800));
+        maxReplyLength = Math.max(8, config.getInt("submit.max-reply-length", 300));
+        duplicateCheck = config.getBoolean("submit.duplicate-check", true);
+        duplicateThreshold = clamp(config.getDouble("submit.duplicate-threshold", 0.6), 0.1D, 1.0D);
+        maskSensitive = config.getBoolean("submit.mask-sensitive", true);
+        retryQueueEnabled = config.getBoolean("submit.retry-queue", true);
+        retryIntervalMinutes = Math.max(1, config.getInt("submit.retry-interval-minutes", 10));
+        retryMaxAttempts = Math.max(1, config.getInt("submit.retry-max-attempts", 5));
+        retryKeepHours = Math.max(1, config.getInt("submit.retry-keep-hours", 72));
 
         githubEnabled = config.getBoolean("channels.github.enabled", true);
         // 兼容更早的写法：token 写在 channels.github.token，旧配置写在顶层 github.token
@@ -158,6 +183,7 @@ public class PluginConfig {
         slaBroadcast = config.getBoolean("tracking.sla.broadcast", true);
         slaNotifyGroups = config.getBoolean("tracking.sla.notify-groups", false);
         slaNotifyPrivate = config.getBoolean("tracking.sla.notify-private", true);
+        rateLimitThreshold = Math.max(0, config.getInt("tracking.rate-limit-threshold", 100));
 
         categories = readCategories(config);
     }
@@ -191,6 +217,13 @@ public class PluginConfig {
             value = value.substring(0, value.length() - 1);
         }
         return value;
+    }
+
+    private static double clamp(double value, double min, double max) {
+        if (value < min) {
+            return min;
+        }
+        return value > max ? max : value;
     }
 
     /** 按 id 查找分类，找不到返回 {@code null}。 */
@@ -286,6 +319,53 @@ public class PluginConfig {
 
     public int getMaxBodyLength() {
         return maxBodyLength;
+    }
+
+    /** 玩家用 {@code /iusse reply} 回复反馈时的内容长度上限。 */
+    public int getMaxReplyLength() {
+        return maxReplyLength;
+    }
+
+    /** 提交前是否检查已有相似反馈。 */
+    public boolean isDuplicateCheck() {
+        return duplicateCheck;
+    }
+
+    /** 判定为疑似重复的相似度阈值（0.1 ~ 1.0）。 */
+    public double getDuplicateThreshold() {
+        return duplicateThreshold;
+    }
+
+    /** 是否自动给正文里的 IP / QQ 等隐私信息打码。 */
+    public boolean isMaskSensitive() {
+        return maskSensitive;
+    }
+
+    /** 全部渠道投递失败时，是否存盘等待重发。 */
+    public boolean isRetryQueueEnabled() {
+        return retryQueueEnabled;
+    }
+
+    public int getRetryIntervalMinutes() {
+        return retryIntervalMinutes;
+    }
+
+    public int getRetryMaxAttempts() {
+        return retryMaxAttempts;
+    }
+
+    public int getRetryKeepHours() {
+        return retryKeepHours;
+    }
+
+    /** GitHub 请求失败时的重试次数（不含首次）。 */
+    public int getRetryAttempts() {
+        return retryAttempts;
+    }
+
+    /** 剩余额度低于该值时自动降低轮询频率，0 表示不降频。 */
+    public int getRateLimitThreshold() {
+        return rateLimitThreshold;
     }
 
     public List<Category> getCategories() {

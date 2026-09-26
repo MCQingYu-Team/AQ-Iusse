@@ -19,7 +19,10 @@ import cn.aqcraft.iusse.net.Http;
 public class ChannelManager {
 
     private final AqIssuePlugin plugin;
+    /** 当前可用的渠道。 */
     private final List<Channel> channels = new ArrayList<Channel>();
+    /** 配置里声明过的全部渠道，含未启用的（/iusse test 要能看到它们为什么没启用）。 */
+    private final List<Channel> allChannels = new ArrayList<Channel>();
 
     public ChannelManager(AqIssuePlugin plugin) {
         this.plugin = plugin;
@@ -30,12 +33,13 @@ public class ChannelManager {
         stopAll();
 
         PluginConfig config = plugin.getPluginConfig();
-        String userAgent = "AQIssue/" + plugin.getPluginMeta().getVersion();
 
         List<Channel> candidates = new ArrayList<Channel>();
-        candidates.add(new GitHubChannel(config, userAgent));
+        candidates.add(new GitHubChannel(plugin.getGitHubApi(), config));
         candidates.add(new DiscordChannel(config));
         candidates.add(new OneBotChannel(plugin, config));
+
+        allChannels.addAll(candidates);
 
         for (Channel channel : candidates) {
             if (!channel.isEnabled()) {
@@ -66,10 +70,16 @@ public class ChannelManager {
             }
         }
         channels.clear();
+        allChannels.clear();
     }
 
     public List<Channel> getChannels() {
         return Collections.unmodifiableList(channels);
+    }
+
+    /** 配置里声明过的全部渠道（含未启用的）。 */
+    public List<Channel> getAllChannels() {
+        return Collections.unmodifiableList(allChannels);
     }
 
     public boolean isEmpty() {
@@ -89,22 +99,7 @@ public class ChannelManager {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
             @Override
             public void run() {
-                final List<ChannelResult> results = new ArrayList<ChannelResult>(targets.size());
-                for (Channel channel : targets) {
-                    ChannelResult result;
-                    try {
-                        result = channel.submit(submission);
-                    } catch (Throwable throwable) {
-                        result = ChannelResult.failure(channel, describe(throwable));
-                        plugin.getLogger().warning("渠道 " + channel.getId() + " 投递失败："
-                                + throwable.getClass().getSimpleName() + ": " + throwable.getMessage());
-                    }
-                    String link = result.getLink();
-                    if (link != null && !link.isEmpty()) {
-                        submission.addLink(link);
-                    }
-                    results.add(result);
-                }
+                final List<ChannelResult> results = deliver(targets, submission);
                 Bukkit.getScheduler().runTask(plugin, new Runnable() {
                     @Override
                     public void run() {
@@ -113,6 +108,35 @@ public class ChannelManager {
                 });
             }
         });
+    }
+
+    /**
+     * 同步投递（调用方必须已在异步线程上，例如重发队列）。
+     *
+     * @return 每个渠道的结果
+     */
+    public List<ChannelResult> submitAllSync(Submission submission) {
+        return deliver(new ArrayList<Channel>(channels), submission);
+    }
+
+    private List<ChannelResult> deliver(List<Channel> targets, Submission submission) {
+        List<ChannelResult> results = new ArrayList<ChannelResult>(targets.size());
+        for (Channel channel : targets) {
+            ChannelResult result;
+            try {
+                result = channel.submit(submission);
+            } catch (Throwable throwable) {
+                result = ChannelResult.failure(channel, describe(throwable));
+                plugin.getLogger().warning("渠道 " + channel.getId() + " 投递失败："
+                        + throwable.getClass().getSimpleName() + ": " + throwable.getMessage());
+            }
+            String link = result.getLink();
+            if (link != null && !link.isEmpty()) {
+                submission.addLink(link);
+            }
+            results.add(result);
+        }
+        return results;
     }
 
     private static String describe(Throwable throwable) {

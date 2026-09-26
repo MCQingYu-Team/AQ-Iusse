@@ -61,6 +61,13 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 | 玩家零门槛 | 玩家不需要任何账号，服务器统一持有一个凭据 |
 | 来源可追溯 | 各渠道的消息都会带上玩家名、UUID、分类、服务端版本与提交时间 |
 | 反馈闭环 | Issue 被关闭或有人评论时通知提交者：在线发游戏内消息，离线经 EasyBot 查 QQ 私信；长时间未处理会自动提醒管理员 |
+| 玩家可追进度 | `/iusse mine` 看自己提过的反馈，`/iusse reply <编号> <内容>` 直接往 Issue 里补说明，不用重新提一条 |
+| 重复检测 | 提交前先在未关闭的反馈里找相似的，命中时弹确认框，同一个问题不会被提十遍 |
+| 隐私打码 | 自动给正文里的 IP / QQ / 手机号 / 邮箱打码（可按分类单独关闭，举报内容默认不打码） |
+| 失败重发 | 全部渠道都投递失败时存盘，之后自动重试；补发成功会通知玩家，屡次失败也会告诉他 |
+| 游戏内管理 | `/iusse list` / `close` / `stats` 让管理员不用切到浏览器就能处理反馈 |
+| 一键自检 | `/iusse test` 一次看清 PAT、仓库、标签、各渠道、EasyBot 与重发队列的状态 |
+| 额度自保护 | GitHub API 剩余额度偏低时自动降低轮询频率，把额度留给玩家提交 |
 | 单语言文件 | 所有面向玩家的文案都在 `lang.yml`，改文案不用碰代码和 `config.yml` |
 | 零第三方依赖 | HTTP 用 `HttpURLConnection`、JSON 自写、WebSocket 服务端自写，无任何外部依赖 |
 
@@ -272,6 +279,7 @@ github:                      # 仓库信息与 Issue 模板
   include-player-info: true
   include-server-info: true
   timeout-millis: 10000
+  retry: 2                   # 网络异常 / 429 / 5xx 时的重试次数
   proxy:                     # 国内服务器连不上 api.github.com / discord.com 时启用
     enabled: false
     host: "127.0.0.1"
@@ -288,13 +296,134 @@ submit:
   min-title-length: 4
   max-title-length: 60
   max-body-length: 800
+  max-reply-length: 300      # /iusse reply 单条回复的长度上限
+
+  duplicate-check: true      # 提交前先找相似反馈，命中时弹确认框
+  duplicate-threshold: 0.6   # 判定为疑似重复的相似度阈值（0.1 ~ 1.0）
+  mask-sensitive: true       # 自动给 IP / QQ / 手机号 / 邮箱打码
+
+  retry-queue: true          # 投递全部失败时存盘等待重发
+  retry-interval-minutes: 10
+  retry-max-attempts: 5      # 超过就放弃并告知玩家
+  retry-keep-hours: 72
+
+tracking:
+  # ……完整项见 config.yml
+  rate-limit-threshold: 100  # 剩余额度低于此值就自动降低轮询频率，0 表示不降频
 
 categories:                  # 对话框里的「反馈分类」下拉项
   - id: "bug"
     name: "Bug 反馈"
     description: "报错、闪退、功能异常、卡顿"
     labels: ["bug"]          # 该分类额外附加的 GitHub 标签
+
+  - id: "report"
+    name: "举报投诉"
+    description: "违规行为、玩家纠纷、管理投诉"
+    labels: ["report"]
+    mask: false              # 举报内容里的 QQ 号是必要证据，不打码
 ```
+
+## 反馈管理与运维
+
+### 一键自检：`/iusse test`
+
+排查投递问题时先用它，比 `status` 多三件事：把**未启用的渠道也列出来并说明原因**、
+检查配置里的标签在仓库里**是否真的存在**、报告 EasyBot 与重发队列状态。
+
+```
+[AQIssue] AQIssue 自检结果：
+ [正常] GitHub - PAT 有效｜仓库 MCQingYu-Team/QY-SERVER-IUSSE｜剩余额度 4987
+ [注意] 缺失标签 - 游戏内反馈、report（GitHub 会静默忽略未创建的标签）
+ [注意] Discord - 未启用：配置中未启用
+ [异常] QQ 群 - 未连接（正在重试 ws://p1.i9mr.com:44987/）
+ [正常] EasyBot - 已加载，可用 /iusse qq <玩家> 查询绑定的 QQ
+ [正常] 反馈跟踪 - 已记录 12 条｜待重发 0 条
+```
+
+> [!TIP]
+> 「标签不存在」是个很容易踩的坑 —— GitHub 对未知标签**不报错也不创建**，
+> 配了等于没配，只有自检才会告诉你。
+
+### 查询玩家绑定的 QQ：`/iusse qq <玩家>`
+
+排查 QQ 通知链路时最有用的一条指令，一次看清「EasyBot 在不在 → 玩家绑没绑 → OneBot 发得出去吗」：
+
+```
+/iusse qq xcbro
+[AQIssue] 玩家 xcbro 绑定的 QQ：12345678
+
+/iusse qq xcbro 这是一条测试消息
+[AQIssue] 测试私信已发送到 12345678，去 QQ 上看看收到没有。
+```
+
+第二个参数是可选的：填了就会往那个 QQ 发一条私信，用来验证 OneBot 通路。
+输入玩家名时支持 Tab 补全（提示当前在线玩家）。
+
+### 在游戏里处理反馈
+
+```
+/iusse list                    # 待处理的按等待时间排序，超时的标红加粗
+/iusse close 12 已在 v2.4.1 修复   # 理由会作为 Issue 评论发出，并通知提交者
+/iusse stats                   # 提交量 / 待处理 / 超时 / 平均处理时长 / 待重发
+```
+
+`/iusse stats` 完全基于本地的 `issues.json` 计算，**不消耗任何 API 额度**。
+
+### 隐私打码
+
+反馈正文最终会落到公开的 GitHub 仓库与 QQ 群里，而玩家经常顺手把「我的 IP 是 1.2.3.4」
+「QQ 12345678」一起写进去。插件在投递前会把这几类信息打码：
+
+| 类型 | 处理方式 |
+| --- | --- |
+| IPv4 | `1.2.3.4` → `1.2.*.*`（每段必须 ≤ 255，避免误伤版本号） |
+| 手机号 | `13812345678` → `138****5678` |
+| 邮箱 | `zhangsan@qq.com` → `z***@qq.com` |
+| QQ 号 | 只在明确写了「QQ / 扣扣 / 企鹅 / QQ 群」时才处理：`12345678` → `12*****8` |
+
+只处理高置信度的形态，宁可漏掉也不误伤。
+判到就打码并提示玩家 `（检测到疑似 IP / QQ 等隐私信息，已自动打码）`。
+
+举报投诉类的内容里 QQ 号是必要证据，所以那个分类用 `mask: false` 单独关掉了；
+想全局关掉就设 `submit.mask-sensitive: false`。
+
+### 重复检测
+
+开启 `submit.duplicate-check` 后，提交前会先把标题和最近未关闭的反馈逐一比对：
+
+- 先归一化（去掉空格、标点，统一小写），再用字符二元组的 Dice 系数算相似度
+- 短标题互相包含也算重复（例如「传送门附近崩溃」与「下界传送门附近崩溃」）
+- 超过 `duplicate-threshold`（默认 0.6）就弹一个确认框：
+
+```
+┌─ 可能已有相同反馈 ─────────────┐
+│ 已经有人提过相似的问题：          │
+│ #12 传送门附近必崩               │
+│ https://github.com/.../issues/12  │
+│            [仍然提交] [返回]      │
+└────────────────────────────────┘
+```
+
+只跟**未关闭**的反馈比：已经处理完的问题再提一次，通常是真碰到了新问题。
+列表带 5 分钟缓存，不会每提交一次就打一次 API。
+
+### 投递失败自动重发
+
+之前所有渠道都失败时，玩家看到「投递失败」就没了后续 —— 而失败的原因往往是
+服务器到 GitHub 的网络抖了一下（国内很常见），过几分钟自己就好了。
+
+现在失败的反馈会存到 `plugins/AQIssue/queue.json`，每 `retry-interval-minutes` 分钟重试一次：
+
+- 重试成功 → 补建 Issue，并告诉玩家「之前那条已补发成功」+ 链接
+- 重试 `retry-max-attempts` 次仍失败，或超过 `retry-keep-hours` 小时 → 放弃，并告知玩家可以重新提交
+- 队列上限 200 条，单轮最多重试 5 条（不把 API 额度一次打光）
+
+### API 额度自保护
+
+GitHub 未认证限额只有 60/小时，认证后是 5000/小时。跟踪轮询会记录每次响应的
+`X-RateLimit-Remaining`，低于 `tracking.rate-limit-threshold`（默认 100）时
+自动把轮询间隔临时放大 6 倍，把额度留给「玩家提交反馈」这件更要紧的事，额度恢复后自动还原。
 
 ### lang.yml
 
@@ -311,8 +440,15 @@ categories:                  # 对话框里的「反馈分类」下拉项
 | --- | --- | --- |
 | `/iusse` | 打开反馈对话框 | `aqissue.use`（默认所有玩家） |
 | `/iusse submit <分类> <标题>\|<内容>` | 一行式提交，任何客户端都能用 | `aqissue.use` |
+| `/iusse mine` | 查看自己提交过的反馈与处理进度 | `aqissue.use` |
+| `/iusse reply <编号> <内容>` | 往自己的反馈里补说明，直接变成 Issue 评论 | `aqissue.use` |
 | `/iusse url` | 显示仓库地址 | `aqissue.use` |
-| `/iusse status` | 逐个检查渠道并显示状态 | `aqissue.admin` |
+| `/iusse list [open\|closed\|all]` | 列出反馈，等得最久的最先显示 | `aqissue.admin` |
+| `/iusse close <编号> [理由]` | 关闭 Issue（理由会作为评论发出）并通知提交者 | `aqissue.admin` |
+| `/iusse stats` | 提交量 / 待处理 / 超时 / 平均处理时长 / 待重发 | `aqissue.admin` |
+| `/iusse test` | 逐项自检 GitHub、标签、各渠道、EasyBot 与队列 | `aqissue.admin` |
+| `/iusse qq <玩家> [测试消息]` | 查玩家绑定的 QQ，可顺手发一条测试私信 | `aqissue.admin` |
+| `/iusse status` | 逐个检查已启用渠道 | `aqissue.admin` |
 | `/iusse reload` | 重载 `config.yml` 与 `lang.yml`，并重建渠道 | `aqissue.admin` |
 | `/iusse help` | 显示帮助 | `aqissue.use` |
 
@@ -353,7 +489,7 @@ mvn clean package
 src/main/java/cn/aqcraft/iusse/
 ├─ AqIssuePlugin.java              插件主类：指令注册、投递编排、结果汇总
 ├─ command/IssueCommand.java       /iusse 指令与 Tab 补全
-├─ dialog/FeedbackDialog.java      原生对话框构建与回调
+├─ dialog/FeedbackDialog.java      原生对话框（提交 / 重复确认）
 ├─ channel/
 │   ├─ Channel.java                渠道接口
 │   ├─ ChannelManager.java         渠道编排与异步分发
@@ -362,18 +498,26 @@ src/main/java/cn/aqcraft/iusse/
 │   ├─ GitHubChannel.java          GitHub Issue
 │   ├─ DiscordChannel.java         Discord Webhook
 │   └─ OneBotChannel.java          OneBot（反向 WS 服务端 / 正向 WS 客户端）
-├─ github/MiniJson.java            极简 JSON 编解码
+├─ github/
+│   ├─ GitHubApi.java              共用 REST 客户端（重试、额度、错误翻译）
+│   └─ MiniJson.java               极简 JSON 编解码
 ├─ net/
-│   ├─ Http.java                   共用 HTTP 客户端
+│   ├─ Http.java                   共用 HTTP 客户端（PATCH 走 JDK HttpClient）
 │   └─ WebSocketConnection.java    手写 WebSocket 连接（服务端 + 客户端）
 ├─ config/                         PluginConfig / LangConfig / Category
 ├─ tracking/
 │   ├─ IssueRecord.java            单条跟踪记录
-│   └─ IssueTracker.java           Issue 状态轮询、回传玩家、超时提醒
+│   ├─ IssueTracker.java           Issue 状态轮询、回传玩家、超时提醒
+│   ├─ IssueStats.java             统计（/iusse stats）
+│   ├─ QueuedFeedback.java         一条待重发的反馈
+│   └─ FeedbackQueue.java          投递失败重发队列
 ├─ integration/EasyBotBridge.java  反射查询玩家绑定的 QQ（无编译期依赖）
 ├─ session/CooldownManager.java    提交冷却
 ├─ listener/PlayerJoinListener.java 上线补发离线通知
-└─ util/Text.java                  颜色代码处理
+└─ util/
+    ├─ Text.java                   颜色代码处理
+    ├─ Sanitizer.java              隐私信息打码
+    └─ Similarity.java             标题相似度（重复检测）
 ```
 
 投递全程在异步线程执行，结果回到主线程再发消息，不会卡服；三个渠道按顺序投递，
@@ -402,7 +546,20 @@ NapCat 的反向 WS 没连上：检查 URL、端口是否放行、两边 token �
 连接成功时插件控制台会有 `OneBot 客户端已连接` 的日志。
 
 **国内服务器连不上 GitHub / Discord？**
-在 `config.yml` 里启用 `github.proxy`。
+在 `config.yml` 里启用 `github.proxy`。偶尔抖动不用管，插件会自动重试（`github.retry`），
+重试仍失败的话反馈会进重发队列，不会丢。
+
+**玩家说反馈提了但仓库里没有？**
+执行 `/iusse stats` 看「待重发队列」 —— 有条目就说明当时投递失败、正在自动重试；
+再看控制台有没有对应的警告。如果队列为 0 而仓库确实没有，检查是不是被 PAT 权限挡住了
+（用 `/iusse test` 一眼就能看出）。
+
+**担心玩家把 QQ 号写进公开仓库？**
+默认已开启自动打码（`submit.mask-sensitive`），举报投诉分类因为需要保留证据而单独关掉了。
+
+**同一个问题被提了好几遍？**
+`submit.duplicate-check` 默认开启，命中时会在提交前弹确认框。
+觉得太敏感就把 `duplicate-threshold` 调高（比如 0.75），嫌不灵就调低。
 
 ## 许可
 

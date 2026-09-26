@@ -92,6 +92,50 @@ public class FeedbackDialog {
         player.showDialog(dialog);
     }
 
+    /**
+     * 「可能已有相同反馈」确认框。
+     * <p>
+     * 玩家点「仍然提交」才会真正投递 —— 这一步刻意绕过重复检测，
+     * 因为玩家已经看过提示并确认这不是同一个问题。
+     */
+    public void openDuplicate(final Player player, final Category category, final String title,
+                              final String body, int existingNumber, String existingTitle,
+                              String existingUrl) {
+        final LangConfig lang = plugin.getLang();
+        final String message = lang.plain("dialog.duplicate-body",
+                "number", existingNumber,
+                "title", existingTitle,
+                "url", existingUrl == null ? "" : existingUrl);
+
+        Dialog dialog = Dialog.create(factory -> {
+            DialogRegistryEntry.Builder entry = factory.empty();
+            entry.base(DialogBase.builder(Component.text(lang.plain("dialog.duplicate-title")))
+                    .canCloseWithEscape(true)
+                    .body(java.util.Collections.singletonList(
+                            DialogBody.plainMessage(Component.text(message))))
+                    .build());
+
+            entry.type(DialogType.confirmation(
+                    ActionButton.builder(Component.text(lang.plain("dialog.duplicate-confirm")))
+                            .tooltip(Component.text(lang.plain("dialog.duplicate-confirm-tooltip")))
+                            .width(BUTTON_WIDTH)
+                            .action(DialogAction.customClick(
+                                    (view, audience) -> {
+                                        if (player.isOnline()) {
+                                            plugin.submit(player, category, title, body);
+                                        }
+                                    },
+                                    ClickCallback.Options.builder().build()))
+                            .build(),
+                    ActionButton.builder(Component.text(lang.plain("dialog.duplicate-cancel")))
+                            .tooltip(Component.text(lang.plain("dialog.duplicate-cancel-tooltip")))
+                            .width(BUTTON_WIDTH)
+                            .build()));
+        });
+
+        player.showDialog(dialog);
+    }
+
     private List<SingleOptionDialogInput.OptionEntry> buildCategoryOptions(PluginConfig config, LangConfig lang) {
         List<Category> categories = config.getCategories();
         List<SingleOptionDialogInput.OptionEntry> options =

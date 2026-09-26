@@ -15,7 +15,14 @@ commands:
     usage: |
       /iusse              打开反馈对话框
       /iusse submit <分类> <标题>|<内容>
-      /iusse status       查看各渠道状态
+      /iusse mine         查看我提交过的反馈
+      /iusse reply <编号> <内容>
+      /iusse list         列出反馈（管理员）
+      /iusse close <编号> [理由]（管理员）
+      /iusse stats        反馈统计（管理员）
+      /iusse test         自检各渠道（管理员）
+      /iusse qq <玩家>    查询玩家绑定的 QQ（管理员）
+      /iusse status       查看各渠道状态（管理员）
       /iusse url          查看仓库地址
       /iusse reload       重载配置（管理员）
     # 别名不宜用 issue 这种过于通用的名字，容易与其它插件撞车导致命令注册失败
@@ -24,8 +31,8 @@ commands:
 
 permissions:
   aqissue.use:
-    description: 允许使用 /iusse 打开对话框并提交反馈
+    description: 允许使用 /iusse 打开对话框、提交反馈、查看与回复自己的反馈
     default: true
   aqissue.admin:
-    description: 允许重载配置、查看连接状态
+    description: 允许管理反馈与重载配置（列出 / 关闭 / 统计 / 自检 / 查询 QQ / 重载），并豁免提交限制
     default: op

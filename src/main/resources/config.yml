@@ -38,6 +38,10 @@ github:
   # 网络超时（毫秒）
   timeout-millis: 10000
 
+  # 请求失败时的重试次数（不含首次）。只对网络异常、429 与 5xx 生效；
+  # 401 / 404 这类「配置本身有问题」的错误重试多少次都没用，不会重试。
+  retry: 2
+
   # 代理（国内服务器访问 api.github.com 不稳定时可打开）
   proxy:
     enabled: false
@@ -117,6 +121,10 @@ tracking:
   # 玩家离线时，经 EasyBot 查询其绑定的 QQ 并私信通知（需要服务器装了 EasyBot）
   notify-qq-offline: true
 
+  # GitHub API 剩余额度低于该值时自动降低轮询频率（把间隔临时放大 6 倍），
+  # 额度恢复后自动还原。0 表示不降频。
+  rate-limit-threshold: 100
+
   # 处理超时提醒（SLA）
   sla:
     enabled: true
@@ -139,13 +147,38 @@ submit:
   cooldown-seconds: 300
   # 拥有该权限的玩家不受提交限制（冷却 + 长度校验），留空表示不启用
   bypass-permission: "aqissue.admin"
-  # 标题长度限制（对话框直接限制输入长度）
-  min-title-length: 4
-  max-title-length: 60
-  # 正文最大长度
-  max-body-length: 800
+  # 标题长度限制（对话框直接限制输入长度
+  # /iusse reply 单条回复的最大长度
+  max-reply-length: 300
 
-# ------------------------------------------------------------
+  # 提交前先在已有的未关闭反馈里找相似的，命中时先弹一个确认框，
+  # 减少「同一个问题被提十遍」。需要 GitHub 渠道可用。
+  duplicate-check: true
+  # 判定为疑似重复的相似度阈值（0.1 ~ 1.0，越大越严格）
+  duplicate-threshold: 0.6
+
+  # 自动给正文里的 IP / QQ / 手机号 / 邮箱打码（反馈通常落在公开仓库里）。
+  # 单个分类可以用 mask: false 单独关掉，见下面 categories 段。
+  mask-sensitive: true
+# mask      该分类是否参与隐私打码，默认 true；举报投诉要保留 QQ 号，所以关掉
+# 注意：labels 里的标签必须已经在仓库里创建好，否则 GitHub 会静默忽略
+categories:
+  - id: "bug"
+    name: "Bug 反馈"
+    description: "报错、闪退、功能异常、卡顿"
+    labels: ["bug"]
+
+  - id: "feature"
+    name: "功能建议"
+    description: "希望服务器新增或优化的内容"
+    labels: ["enhancement"]
+
+  - id: "report"
+    name: "举报投诉"
+    description: "违规行为、玩家纠纷、管理投诉"
+    labels: ["report"]
+    # 举报内容里的 QQ 号 / 玩家名是必要的证据，不打码
+    mask: false----------------------------------------
 # 反馈分类（对话框里「反馈分类」下拉框的选项）
 # ------------------------------------------------------------
 # id        用于 /iusse submit <id> ...，也是写入 GitHub 的标签来源

@@ -16,12 +16,19 @@ public class Category {
     private final String name;
     private final String description;
     private final List<String> labels;
+    /** 该分类的内容是否参与隐私打码（举报投诉通常需要保留 QQ 号，可以关掉）。 */
+    private final boolean maskSensitive;
 
     public Category(String id, String name, String description, List<String> labels) {
+        this(id, name, description, labels, true);
+    }
+
+    public Category(String id, String name, String description, List<String> labels, boolean maskSensitive) {
         this.id = id;
         this.name = name;
         this.description = description == null ? "" : description;
         this.labels = labels == null ? new ArrayList<String>() : labels;
+        this.maskSensitive = maskSensitive;
     }
 
     /**
@@ -50,7 +57,14 @@ public class Category {
                 }
             }
         }
-        return new Category(id, name, description, labels);
+        // 不给默认值就是开启打码，需要原样保留内容的分类才显式写 mask: false
+        boolean mask = !Boolean.FALSE.equals(map.get("mask"));
+        return new Category(id, name, description, labels, mask);
+    }
+
+    /** 该分类的内容是否需要打码（还要叠加 config.yml 里的全局开关）。 */
+    public boolean isMaskSensitive() {
+        return maskSensitive;
     }
 
     public String getId() {
