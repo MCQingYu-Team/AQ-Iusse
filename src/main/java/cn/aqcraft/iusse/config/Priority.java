@@ -95,6 +95,10 @@ public class Priority {
             return false;
         }
         String value = raw.trim();
+        if (value.isEmpty()) {
+            // 空串代表「没选」，不是要匹配某个档位
+            return false;
+        }
         return id.equalsIgnoreCase(value) || name.equalsIgnoreCase(value);
     }
 }
