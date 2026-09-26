@@ -26,6 +26,12 @@ logs/
 plugins/
 *.log
 
+# ---- 凭据（绝对不能提交）----
+*.pem
+*.p12
+*.jks
+github-app.pem
+
 # ---- 其它 ----
 .DS_Store
 Thumbs.db

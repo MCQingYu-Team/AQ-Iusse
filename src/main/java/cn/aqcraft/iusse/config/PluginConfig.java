@@ -1,9 +1,17 @@
 package cn.aqcraft.iusse.config;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.logging.Level;
 
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -39,6 +47,28 @@ public class PluginConfig {
     private int maxTitleLength;
     private int maxBodyLength;
 
+    // 渠道：GitHub App / PAT
+    private boolean githubEnabled;
+    private String githubAuthType;
+    private String githubAppId;
+    private long githubInstallationId;
+    private String githubPrivateKey;
+
+    // 渠道：Discord Webhook
+    private boolean discordEnabled;
+    private String discordWebhookUrl;
+    private String discordUsername;
+    private int discordEmbedColor;
+
+    // 渠道：OneBot 反向 WebSocket
+    private boolean onebotEnabled;
+    private int onebotPort;
+    private String onebotBind;
+    private String onebotPath;
+    private String onebotAccessToken;
+    private List<Long> onebotGroupIds;
+    private long onebotTimeoutMillis;
+
     // 分类
     private List<Category> categories;
 
@@ -70,7 +100,63 @@ public class PluginConfig {
         maxTitleLength = Math.max(minTitleLength, config.getInt("submit.max-title-length", 60));
         maxBodyLength = Math.max(16, config.getInt("submit.max-body-length", 800));
 
+        githubEnabled = config.getBoolean("channels.github.enabled", true);
+        githubAuthType = config.getString("channels.github.auth-type", "app").trim().toLowerCase(Locale.ROOT);
+        githubAppId = config.getString("channels.github.app-id", "").trim();
+        githubInstallationId = parseLong(config.getString("channels.github.installation-id", ""));
+        githubPrivateKey = loadPrivateKey(config);
+
+        discordEnabled = config.getBoolean("channels.discord.enabled", false);
+        discordWebhookUrl = config.getString("channels.discord.webhook-url", "").trim();
+        discordUsername = config.getString("channels.discord.username", "服务器反馈");
+        discordEmbedColor = config.getInt("channels.discord.embed-color", 0x5865F2);
+
+        onebotEnabled = config.getBoolean("channels.onebot.enabled", false);
+        onebotPort = config.getInt("channels.onebot.port", 6700);
+        onebotBind = config.getString("channels.onebot.bind", "127.0.0.1");
+        onebotPath = config.getString("channels.onebot.path", "/onebot");
+        onebotAccessToken = config.getString("channels.onebot.access-token", "").trim();
+        onebotGroupIds = config.getLongList("channels.onebot.group-ids");
+        if (onebotGroupIds == null) {
+            onebotGroupIds = Collections.emptyList();
+        }
+        onebotTimeoutMillis = Math.max(1000L, config.getLong("channels.onebot.timeout-millis", 8000L));
+
         categories = readCategories(config);
+    }
+
+    /** 读 App 私钥：优先 channels.github.private-key-file，否则用内联的 private-key。 */
+    private String loadPrivateKey(FileConfiguration config) {
+        String inline = config.getString("channels.github.private-key", "");
+        String fileName = config.getString("channels.github.private-key-file", "").trim();
+        if (fileName.isEmpty()) {
+            return inline;
+        }
+        File file = new File(fileName);
+        if (!file.isAbsolute()) {
+            file = new File(plugin.getDataFolder(), fileName);
+        }
+        if (!file.isFile()) {
+            plugin.getLogger().warning("找不到 GitHub App 私钥文件：" + file.getAbsolutePath());
+            return inline;
+        }
+        try {
+            return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.WARNING, "读取 GitHub App 私钥失败：" + file.getAbsolutePath(), e);
+            return inline;
+        }
+    }
+
+    private static long parseLong(String value) {
+        if (value == null) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException ignored) {
+            return 0L;
+        }
     }
 
     private List<Category> readCategories(FileConfiguration config) {
@@ -192,6 +278,83 @@ public class PluginConfig {
 
     public List<Category> getCategories() {
         return categories;
+    }
+
+    // ------------------------------------------------------------------
+    // 渠道配置
+    // ------------------------------------------------------------------
+
+    public boolean isGitHubEnabled() {
+        return githubEnabled;
+    }
+
+    /** true 表示用 GitHub App 机器人身份提交。 */
+    public boolean isGitHubUsingApp() {
+        return "app".equals(githubAuthType);
+    }
+
+    public String getGitHubAppId() {
+        return githubAppId;
+    }
+
+    public long getGitHubInstallationId() {
+        return githubInstallationId;
+    }
+
+    public String getGitHubPrivateKey() {
+        return githubPrivateKey == null ? "" : githubPrivateKey;
+    }
+
+    public boolean isDiscordEnabled() {
+        return discordEnabled;
+    }
+
+    public String getDiscordWebhookUrl() {
+        return discordWebhookUrl == null ? "" : discordWebhookUrl;
+    }
+
+    public String getDiscordUsername() {
+        return discordUsername == null ? "" : discordUsername;
+    }
+
+    public int getDiscordEmbedColor() {
+        return discordEmbedColor;
+    }
+
+    public boolean isOneBotEnabled() {
+        return onebotEnabled;
+    }
+
+    public int getOneBotPort() {
+        return onebotPort;
+    }
+
+    public String getOneBotBind() {
+        return onebotBind == null || onebotBind.isEmpty() ? "127.0.0.1" : onebotBind;
+    }
+
+    public String getOneBotPath() {
+        return onebotPath == null || onebotPath.isEmpty() ? "/onebot" : onebotPath;
+    }
+
+    public String getOneBotAccessToken() {
+        return onebotAccessToken == null ? "" : onebotAccessToken;
+    }
+
+    public List<Long> getOneBotGroupIds() {
+        return onebotGroupIds == null ? Collections.<Long>emptyList() : onebotGroupIds;
+    }
+
+    public long getOneBotTimeoutMillis() {
+        return onebotTimeoutMillis;
+    }
+
+    /** 按配置构造代理对象，未启用时返回 {@code null}。 */
+    public Proxy resolveProxy() {
+        if (!proxyEnabled) {
+            return null;
+        }
+        return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
     }
 
     /** 仓库网页地址。 */

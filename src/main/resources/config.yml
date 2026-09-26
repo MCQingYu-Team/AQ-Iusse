@@ -24,10 +24,6 @@ github:
   owner: "MCQingYu-Team"
   repo: "AQ-Iusse"
 
-  # 访问令牌。推荐使用 Fine-grained PAT，只授予目标仓库的 Issues: Read and write 权限。
-  # 留空则只能匿名创建 Issue（易触发限流，且私有仓库不可用）。
-  token: ""
-
   # 自动附加到新 Issue 上的标签（标签必须已存在于仓库中，否则会被 GitHub 忽略）
   labels:
     - "游戏内反馈"
@@ -47,6 +43,57 @@ github:
     enabled: false
     host: "127.0.0.1"
     port: 7890
+
+# ------------------------------------------------------------
+# 投递渠道（可同时开启，玩家一次提交会发往所有已启用的渠道）
+# ------------------------------------------------------------
+channels:
+  # GitHub Issue。默认用 GitHub App：身份是机器人，token 一小时自动轮换、永不过期，
+  # 不需要像 PAT 那样定期手动更换。
+  github:
+    enabled: true
+    # app   = 机器人身份（推荐）
+    # token = 应急用的 PAT，一般用不到
+    auth-type: "app"
+
+    # 创建步骤：
+    #   1) 打开 https://github.com/settings/apps → New GitHub App
+    #   2) 取消勾选 Webhook，权限只给 Repository permissions → Issues: Read and write
+    #   3) 创建后点 Install App，安装到目标仓库
+    #   4) 安装完成后地址栏里的数字就是 installation-id
+    app-id: ""
+    installation-id: ""
+
+    # App 页面下载的 .pem 私钥放到 plugins/AQIssue/ 下，这里填文件名
+    # （PKCS#1 与 PKCS#8 两种格式都支持，不需要 openssl 转换）
+    private-key-file: "github-app.pem"
+    # 也可以不落盘，直接把 PEM 内容粘在这里；两处只填一个
+    private-key: ""
+
+    # auth-type: token 时才用
+    token: ""
+
+  # Discord 频道 Webhook（不需要机器人常驻）
+  discord:
+    enabled: false
+    # 频道设置 → 整合 → Webhook → 新建 Webhook → 复制 Webhook URL
+    webhook-url: ""
+    username: "服务器反馈"
+    # 左侧色条的十进制颜色
+    embed-color: 5793266
+
+  # OneBot（QQ），采用反向 WebSocket：插件监听端口，NapCat 主动连过来
+  onebot:
+    enabled: false
+    # 绑定网卡。NapCat 与服务器同机时保持 127.0.0.1 即可
+    bind: "127.0.0.1"
+    port: 6700
+    path: "/onebot"
+    # 与 NapCat 反向 WS 的 token 保持一致，留空表示不校验
+    access-token: ""
+    # 要发到哪些群（QQ 群号）
+    group-ids: []
+    timeout-millis: 8000
 
 # ------------------------------------------------------------
 # 提交限制

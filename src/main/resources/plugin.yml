@@ -3,16 +3,16 @@ version: '${project.version}'
 main: cn.aqcraft.iusse.AqIssuePlugin
 api-version: '1.21'
 authors: [MCQingYu-Team]
-description: 在游戏内通过 Paper 对话框（Dialog）向 GitHub 仓库提交 Issue
+description: 在游戏内通过 Paper 对话框把反馈投递到 GitHub / Discord / QQ 群
 website: https://github.com/MCQingYu-Team/AQ-Iusse
 
 commands:
   iusse:
-    description: 打开反馈对话框，或向 GitHub 仓库提交 Issue
+    description: 打开反馈对话框，或直接提交一条反馈
     usage: |
       /iusse              打开反馈对话框
       /iusse submit <分类> <标题>|<内容>
-      /iusse status       查看 GitHub 连接状态
+      /iusse status       查看各渠道状态
       /iusse url          查看仓库地址
       /iusse reload       重载配置（管理员）
     # 别名不宜用 issue 这种过于通用的名字，容易与其它插件撞车导致命令注册失败

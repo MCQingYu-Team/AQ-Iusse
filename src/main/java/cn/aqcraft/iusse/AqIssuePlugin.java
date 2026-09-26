@@ -1,6 +1,5 @@
 package cn.aqcraft.iusse;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashSet;
@@ -14,27 +13,28 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import cn.aqcraft.iusse.channel.ChannelManager;
+import cn.aqcraft.iusse.channel.ChannelResult;
+import cn.aqcraft.iusse.channel.Submission;
 import cn.aqcraft.iusse.command.IssueCommand;
 import cn.aqcraft.iusse.config.Category;
 import cn.aqcraft.iusse.config.LangConfig;
 import cn.aqcraft.iusse.config.PluginConfig;
 import cn.aqcraft.iusse.dialog.FeedbackDialog;
-import cn.aqcraft.iusse.github.GitHubClient;
-import cn.aqcraft.iusse.github.GitHubResult;
 import cn.aqcraft.iusse.session.CooldownManager;
 import cn.aqcraft.iusse.util.Text;
 
 /**
- * AQIssue 主类：把游戏内的反馈直接变成 GitHub Issue。
+ * AQIssue 主类：把游戏内的反馈同时投递到 GitHub / Discord / QQ 群。
  * <p>
- * 入口是 Paper 原生对话框（Dialog API），一份 jar 覆盖 Paper 1.21.7 ~ 最新版。
+ * 入口是 Paper 原生对话框，一次提交会广播到所有已启用的渠道。
  */
 public class AqIssuePlugin extends JavaPlugin {
 
     private PluginConfig pluginConfig;
     private LangConfig lang;
-    private GitHubClient gitHubClient;
     private CooldownManager cooldownManager;
+    private ChannelManager channelManager;
     private FeedbackDialog feedbackDialog;
 
     @Override
@@ -43,8 +43,8 @@ public class AqIssuePlugin extends JavaPlugin {
 
         this.lang = new LangConfig(this);
         this.pluginConfig = new PluginConfig(this);
-        this.gitHubClient = new GitHubClient(this);
         this.cooldownManager = new CooldownManager();
+        this.channelManager = new ChannelManager(this);
         this.feedbackDialog = new FeedbackDialog(this);
 
         PluginCommand command = getCommand("iusse");
@@ -53,10 +53,13 @@ public class AqIssuePlugin extends JavaPlugin {
             command.setExecutor(executor);
             command.setTabCompleter(executor);
             getLogger().info("指令注册成功：/" + command.getName()
-                    + (command.getAliases().isEmpty() ? "" : "（别名 /" + String.join("、/", command.getAliases()) + "）"));
+                    + (command.getAliases().isEmpty() ? ""
+                    : "（别名 /" + String.join("、/", command.getAliases()) + "）"));
         } else {
             getLogger().severe("无法注册指令 /iusse —— plugin.yml 里的 commands 段可能与其他插件冲突。");
         }
+
+        channelManager.reload();
 
         // 每小时清理一次已过期的冷却记录
         getServer().getScheduler().runTaskTimer(this, new Runnable() {
@@ -71,6 +74,9 @@ public class AqIssuePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (channelManager != null) {
+            channelManager.stopAll();
+        }
         if (cooldownManager != null) {
             cooldownManager.clear();
         }
@@ -78,11 +84,14 @@ public class AqIssuePlugin extends JavaPlugin {
 
     private void logStartupSummary() {
         getLogger().info("语言文件：" + lang.getFileName() + " (" + lang.getLocale() + ")");
-        getLogger().info("已加载，目标仓库：" + pluginConfig.getRepoUrl());
-        if (!pluginConfig.isRepoConfigured()) {
-            getLogger().warning("github.owner / github.repo 未配置，提交功能不可用。");
-        } else if (!pluginConfig.hasToken()) {
-            getLogger().warning("尚未配置 github.token —— 只能向公开仓库提交，且极易触发 GitHub 匿名限流。");
+        if (pluginConfig.isRepoConfigured()) {
+            getLogger().info("GitHub 仓库：" + pluginConfig.getRepoUrl());
+        }
+        if (!pluginConfig.hasToken() && pluginConfig.isGitHubEnabled() && !pluginConfig.isGitHubUsingApp()) {
+            getLogger().warning("GitHub 通道既没有配置 App，也没有应急 PAT，该通道会投递失败。");
+        }
+        if (!pluginConfig.isGitHubEnabled() && !pluginConfig.isDiscordEnabled() && !pluginConfig.isOneBotEnabled()) {
+            getLogger().warning("未启用任何投递渠道，请在 config.yml 的 channels 段中至少开启一个。");
         }
     }
 
@@ -92,6 +101,7 @@ public class AqIssuePlugin extends JavaPlugin {
         pluginConfig.load();
         lang.load();
         cooldownManager.clear();
+        channelManager.reload();
         logStartupSummary();
     }
 
@@ -118,6 +128,10 @@ public class AqIssuePlugin extends JavaPlugin {
         if (!checkCooldown(player)) {
             return;
         }
+        if (channelManager.isEmpty()) {
+            send(player, "submit.no-channel");
+            return;
+        }
         try {
             feedbackDialog.open(player);
         } catch (Throwable throwable) {
@@ -127,14 +141,18 @@ public class AqIssuePlugin extends JavaPlugin {
     }
 
     /**
-     * 校验来自对话框或指令的输入，通过后异步提交。
+     * 校验来自对话框或指令的输入，通过后开始投递。
      *
-     * @return true 表示校验通过并已开始提交
+     * @return true 表示校验通过并已开始投递
      */
     public boolean submitFromInput(Player player, String categoryId, String title, String body) {
         Category category = pluginConfig.findCategory(categoryId);
         if (category == null) {
             send(player, "general.unknown-category", "id", categoryId);
+            return false;
+        }
+        if (channelManager.isEmpty()) {
+            send(player, "submit.no-channel");
             return false;
         }
         if (!checkCooldown(player)) {
@@ -180,74 +198,69 @@ public class AqIssuePlugin extends JavaPlugin {
     }
 
     // ------------------------------------------------------------------
-    // 提交
+    // 投递
     // ------------------------------------------------------------------
 
-    /** 把内容异步提交到 GitHub。 */
+    /** 把反馈异步投递到所有已启用的渠道。 */
     public void submit(final Player player, final Category category, final String title, final String body) {
         send(player, "submit.submitting");
 
-        final String issueTitle = Text.oneLine(pluginConfig.getTitlePrefix() + title);
-        final String issueBody = buildIssueBody(player, category, body);
-        final List<String> labels = collectLabels(category);
+        boolean withPlayer = pluginConfig.isIncludePlayerInfo();
+        Submission submission = new Submission(
+                withPlayer ? player.getName() : null,
+                withPlayer ? player.getUniqueId().toString() : null,
+                category.getId(),
+                Text.plain(category.getName()),
+                collectLabels(category),
+                Text.oneLine(pluginConfig.getTitlePrefix() + title),
+                body,
+                pluginConfig.isIncludeServerInfo() ? Bukkit.getName() + " " + Bukkit.getVersion() : null,
+                new Date());
+
         final UUID playerId = player.getUniqueId();
         final String playerName = player.getName();
-        final String categoryId = category.getId();
-
-        Bukkit.getScheduler().runTaskAsynchronously(this, new Runnable() {
+        channelManager.submitAll(submission, new java.util.function.Consumer<List<ChannelResult>>() {
             @Override
-            public void run() {
-                final GitHubResult result = gitHubClient.createIssue(issueTitle, issueBody, labels);
-                Bukkit.getScheduler().runTask(AqIssuePlugin.this, new Runnable() {
-                    @Override
-                    public void run() {
-                        handleResult(playerId, playerName, categoryId, result);
-                    }
-                });
+            public void accept(List<ChannelResult> results) {
+                handleResults(playerId, playerName, category, results);
             }
         });
     }
 
-    private void handleResult(UUID playerId, String playerName, String categoryId, GitHubResult result) {
-        Player player = Bukkit.getPlayer(playerId);
-
-        if (result.isSuccess()) {
-            cooldownManager.markSubmitted(playerId);
-            getLogger().info("玩家 " + playerName + " 提交 Issue #" + result.getIssueNumber()
-                    + "（分类 " + categoryId + "）：" + result.getIssueUrl());
-            if (player != null && player.isOnline()) {
-                player.sendMessage(lang.prefixed("submit.success",
-                        "number", result.getIssueNumber(),
-                        "url", result.getIssueUrl()));
+    private void handleResults(UUID playerId, String playerName, Category category, List<ChannelResult> results) {
+        boolean anySuccess = false;
+        StringBuilder log = new StringBuilder();
+        for (ChannelResult result : results) {
+            if (result.isSuccess()) {
+                anySuccess = true;
             }
+            if (log.length() > 0) {
+                log.append("；");
+            }
+            log.append(result.getDisplayName()).append(result.isSuccess() ? " 成功" : " 失败")
+                    .append('(').append(result.getDetail()).append(')');
+        }
+
+        if (anySuccess) {
+            cooldownManager.markSubmitted(playerId);
+        }
+        getLogger().info("玩家 " + playerName + "，分类 " + category.getId() + " -> " + log);
+
+        Player player = Bukkit.getPlayer(playerId);
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        if (results.isEmpty()) {
+            send(player, "submit.no-channel");
             return;
         }
 
-        getLogger().warning("玩家 " + playerName + " 提交 Issue 失败：" + result.getMessage());
-        if (player != null && player.isOnline()) {
-            player.sendMessage(lang.prefixed("submit.failed", "reason", result.getMessage()));
+        player.sendMessage(lang.prefixed(anySuccess ? "submit.result-header-success" : "submit.all-failed"));
+        for (ChannelResult result : results) {
+            player.sendMessage(lang.text(result.isSuccess() ? "submit.result-line-ok" : "submit.result-line-fail",
+                    "channel", result.getDisplayName(),
+                    "detail", result.getDetail()));
         }
-    }
-
-    /** 组装 Issue 正文：可选的玩家信息 + 反馈分类 + 服务器信息 + 正文。 */
-    private String buildIssueBody(Player player, Category category, String body) {
-        StringBuilder builder = new StringBuilder();
-
-        if (pluginConfig.isIncludePlayerInfo()) {
-            builder.append("- **提交玩家**：").append(player.getName())
-                    .append(" (`").append(player.getUniqueId()).append("`)\n");
-        }
-        builder.append("- **反馈分类**：").append(category.getName())
-                .append(" (`").append(category.getId()).append("`)\n");
-        if (pluginConfig.isIncludeServerInfo()) {
-            builder.append("- **服务端**：").append(Bukkit.getName())
-                    .append(' ').append(Bukkit.getVersion()).append("\n");
-        }
-        builder.append("- **提交时间**：")
-                .append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()))
-                .append("\n\n---\n\n");
-        builder.append(body);
-        return builder.toString();
     }
 
     private List<String> collectLabels(Category category) {
@@ -278,8 +291,8 @@ public class AqIssuePlugin extends JavaPlugin {
         return lang;
     }
 
-    public GitHubClient getGitHubClient() {
-        return gitHubClient;
+    public ChannelManager getChannelManager() {
+        return channelManager;
     }
 
     /** 记录并输出异常，避免异步任务里的异常被吞掉。 */

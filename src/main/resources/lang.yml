@@ -57,17 +57,22 @@ submit:
   body-empty: "&c内容不能为空。"
   body-too-long: "&c内容太长了，最多 {max} 个字。"
   cancelled: "&7已取消本次提交。"
-  submitting: "&7正在提交到 GitHub，请稍候……"
-  success: "&a提交成功！Issue #{number}\n&7{url}"
-  failed: "&c提交失败：&f{reason}"
+  submitting: "&7正在投递到各渠道，请稍候……"
+  result-header-success: "&a提交成功！投递结果："
+  result-line-ok: " &a▶ &f{channel} &7- {detail}"
+  result-line-fail: " &c▶ &f{channel} &7- {detail}"
+  all-failed: "&c所有渠道都投递失败了："
+  no-channel: "&c服务器尚未配置任何反馈渠道，请联系管理员。"
 
 # ------------------------------------------------------------
 # 连接状态 / 仓库信息
 # ------------------------------------------------------------
 status:
-  checking: "&7正在检查 GitHub 连接……"
-  ok: "&a连接正常 &7| 仓库 &f{repo} &7| 认证 &f{auth} &7| 剩余限额 &f{remaining}"
-  failed: "&c连接失败：&f{reason}"
+  checking: "&7正在检查各渠道……"
+  header: "&7投递渠道状态："
+  channel-ok: " &a[正常] &f{channel} &7- {detail}"
+  channel-fail: " &c[异常] &f{channel} &7- {detail}"
+  no-channel: " &7（没有任何已启用的渠道）"
 
 repository:
   url: "&7仓库地址：&f{url}"

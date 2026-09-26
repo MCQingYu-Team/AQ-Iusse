@@ -13,9 +13,9 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 import cn.aqcraft.iusse.AqIssuePlugin;
+import cn.aqcraft.iusse.channel.Channel;
 import cn.aqcraft.iusse.config.Category;
 import cn.aqcraft.iusse.config.PluginConfig;
-import cn.aqcraft.iusse.github.GitHubStatus;
 
 /**
  * {@code /iusse} 指令。
@@ -100,23 +100,37 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
 
     private void handleStatus(final Player player) {
         plugin.send(player, "status.checking");
+        final List<Channel> channels = plugin.getChannelManager().getChannels();
+
         Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
             @Override
             public void run() {
-                final GitHubStatus status = plugin.getGitHubClient().checkStatus();
+                final List<String> lines = new ArrayList<String>();
+                for (Channel channel : channels) {
+                    try {
+                        lines.add(plugin.getLang().text("status.channel-ok",
+                                "channel", channel.getDisplayName(),
+                                "detail", channel.checkStatus()));
+                    } catch (Throwable throwable) {
+                        String message = throwable.getMessage();
+                        lines.add(plugin.getLang().text("status.channel-fail",
+                                "channel", channel.getDisplayName(),
+                                "detail", message == null ? throwable.getClass().getSimpleName() : message));
+                    }
+                }
                 Bukkit.getScheduler().runTask(plugin, new Runnable() {
                     @Override
                     public void run() {
                         if (!player.isOnline()) {
                             return;
                         }
-                        if (status.isOk()) {
-                            plugin.send(player, "status.ok",
-                                    "repo", status.getRepoFullName(),
-                                    "auth", status.getAuthDescription(),
-                                    "remaining", status.getRateRemaining());
-                        } else {
-                            plugin.send(player, "status.failed", "reason", status.getMessage());
+                        player.sendMessage(plugin.getLang().prefixed("status.header"));
+                        if (lines.isEmpty()) {
+                            player.sendMessage(plugin.getLang().text("status.no-channel"));
+                            return;
+                        }
+                        for (String line : lines) {
+                            player.sendMessage(line);
                         }
                     }
                 });
