@@ -52,4 +52,15 @@ public interface Channel {
     default boolean notifyAdmins(String message) {
         return false;
     }
+
+    /**
+     * 按目标类型推送系统通知。
+     *
+     * @param groups   是否发到群 / 频道（Discord 只有这一种目标，传 false 则不发）
+     * @param privates 是否私信个人（只有 OneBot 支持）
+     * @return 是否至少送达一个目标
+     */
+    default boolean notifyAdmins(String message, boolean groups, boolean privates) {
+        return notifyAdmins(message);
+    }
 }

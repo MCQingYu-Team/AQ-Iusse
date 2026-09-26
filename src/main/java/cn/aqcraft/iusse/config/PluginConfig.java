@@ -76,6 +76,8 @@ public class PluginConfig {
     private int slaHours;
     private int slaRepeatHours;
     private boolean slaBroadcast;
+    private boolean slaNotifyGroups;
+    private boolean slaNotifyPrivate;
 
     // 分类
     private List<Category> categories;
@@ -150,6 +152,8 @@ public class PluginConfig {
         slaHours = Math.max(1, config.getInt("tracking.sla.hours", 48));
         slaRepeatHours = Math.max(1, config.getInt("tracking.sla.repeat-hours", 24));
         slaBroadcast = config.getBoolean("tracking.sla.broadcast", true);
+        slaNotifyGroups = config.getBoolean("tracking.sla.notify-groups", false);
+        slaNotifyPrivate = config.getBoolean("tracking.sla.notify-private", true);
 
         categories = readCategories(config);
     }
@@ -333,6 +337,16 @@ public class PluginConfig {
     /** 除控制台外，是否也把超时提醒发到已启用的渠道。 */
     public boolean isSlaBroadcast() {
         return slaBroadcast;
+    }
+
+    /** 超时提醒是否发到 QQ 群。 */
+    public boolean isSlaNotifyGroups() {
+        return slaNotifyGroups;
+    }
+
+    /** 超时提醒是否私信给 private-ids。 */
+    public boolean isSlaNotifyPrivate() {
+        return slaNotifyPrivate;
     }
 
     // ------------------------------------------------------------------

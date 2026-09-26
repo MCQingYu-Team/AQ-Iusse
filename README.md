@@ -219,7 +219,7 @@ https://github.com/MCQingYu-Team/QY-SERVER-IUSSE/issues/12
 
 不想在群里播报的话，把 `tracking.announce-on-close` 改成 `false`。
 
-**超时提醒管理员** —— Issue 超过 `tracking.sla.hours` 小时仍未关闭时，控制台与已启用的渠道（QQ 群 / Discord）会收到提醒：
+**超时提醒管理员** —— Issue 超过 `tracking.sla.hours` 小时仍未关闭时，控制台会打印警告，并把提醒**私信给管理员**（默认不发群，避免刷屏）：
 
 ```
 [AQIssue] [反馈超时] 以下反馈已提交超过 48 小时仍未处理：
@@ -242,8 +242,10 @@ tracking:
   sla:
     enabled: true
     hours: 48               # 超过 48 小时算超时
-    repeat-hours: 24        # 每 24 小时重复提醒一次
-    broadcast: true         # 除控制台外也发到 QQ / Discord
+    repeat-hours: 72        # 之后每 72 小时再提醒一次
+    broadcast: true         # 除控制台外也发到渠道
+    notify-groups: false    # 不往群里发
+    notify-private: true    # 只私信 channels.onebot.private-ids
 ```
 
 > [!NOTE]

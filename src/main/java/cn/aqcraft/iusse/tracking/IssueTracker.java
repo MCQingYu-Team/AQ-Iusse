@@ -325,7 +325,8 @@ public class IssueTracker {
                         "title", record.title,
                         "category", record.categoryName,
                         "age", ageHours)
-                + "\n" + plugin.getLang().plain("sla.footer", "url", record.url));
+                + "\n" + plugin.getLang().plain("sla.footer", "url", record.url),
+                config.isSlaNotifyGroups(), config.isSlaNotifyPrivate());
     }
 
     /** 把「已处理」的结果播报到渠道（QQ 群 / Discord）。 */
@@ -335,17 +336,22 @@ public class IssueTracker {
                 "title", record.title,
                 "category", record.categoryName,
                 "player", record.playerName,
-                "url", record.url));
+                "url", record.url), true, true);
     }
 
-    /** 向所有已启用渠道推一条纯文本通知。 */
-    private void broadcast(String message) {
+    /**
+     * 向所有已启用渠道推一条纯文本通知。
+     *
+     * @param groups   是否发到群 / 频道
+     * @param privates 是否私信个人
+     */
+    private void broadcast(String message, boolean groups, boolean privates) {
         if (message == null || message.isEmpty()) {
             return;
         }
         for (Channel channel : plugin.getChannelManager().getChannels()) {
             try {
-                channel.notifyAdmins(message);
+                channel.notifyAdmins(message, groups, privates);
             } catch (Throwable throwable) {
                 plugin.getLogger().fine("通知经渠道 " + channel.getId() + " 发送失败："
                         + throwable.getMessage());

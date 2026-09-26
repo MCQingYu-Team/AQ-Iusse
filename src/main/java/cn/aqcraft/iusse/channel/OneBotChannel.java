@@ -442,9 +442,15 @@ public class OneBotChannel implements Channel {
         return count + " 个 OneBot 客户端已连接";
     }
 
-    /** 向群与私聊目标推送系统通知（如 SLA 超时提醒）。 */
+    /** 向群与私聊目标推送系统通知。 */
     @Override
     public boolean notifyAdmins(String message) {
+        return notifyAdmins(message, true, true);
+    }
+
+    /** 按目标类型推送系统通知（如超时提醒只私信管理员）。 */
+    @Override
+    public boolean notifyAdmins(String message, boolean groups, boolean privates) {
         Connection connection = pickConnection();
         if (connection == null) {
             return false;
@@ -452,14 +458,18 @@ public class OneBotChannel implements Channel {
         // QQ 不认 MC 的颜色代码，统一去色后再发
         String text = Text.plain(message);
         boolean delivered = false;
-        for (Long groupId : config.getOneBotGroupIds()) {
-            if (sendTo(connection, "send_group_msg", "group_id", groupId, text)) {
-                delivered = true;
+        if (groups) {
+            for (Long groupId : config.getOneBotGroupIds()) {
+                if (sendTo(connection, "send_group_msg", "group_id", groupId, text)) {
+                    delivered = true;
+                }
             }
         }
-        for (Long userId : config.getOneBotPrivateIds()) {
-            if (sendTo(connection, "send_private_msg", "user_id", userId, text)) {
-                delivered = true;
+        if (privates) {
+            for (Long userId : config.getOneBotPrivateIds()) {
+                if (sendTo(connection, "send_private_msg", "user_id", userId, text)) {
+                    delivered = true;
+                }
             }
         }
         return delivered;

@@ -120,9 +120,18 @@ public class DiscordChannel implements Channel {
         return "Webhook 已配置";
     }
 
-    /** 向频道推送一条纯文本系统通知（如 SLA 超时提醒）。 */
+    /** 向频道推送一条纯文本系统通知。 */
     @Override
     public boolean notifyAdmins(String message) {
+        return notifyAdmins(message, true, true);
+    }
+
+    /** Discord 只有频道一种目标，{@code groups} 为 false 时直接不发。 */
+    @Override
+    public boolean notifyAdmins(String message, boolean groups, boolean privates) {
+        if (!groups) {
+            return false;
+        }
         try {
             Map<String, Object> payload = new LinkedHashMap<String, Object>();
             String username = config.getDiscordUsername();

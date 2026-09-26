@@ -121,9 +121,13 @@ tracking:
     # 超过多少小时仍未关闭就提醒管理员
     hours: 48
     # 同一个 Issue 的重复提醒间隔（小时）
-    repeat-hours: 24
+    repeat-hours: 72
     # 除控制台外，是否也发到已启用的渠道（QQ 群 / Discord）
     broadcast: true
+    # 超时提醒是否发到 QQ 群
+    notify-groups: false
+    # 超时提醒是否私信给上面的 private-ids（private-ids 为空时请把 notify-groups 打开）
+    notify-private: true
 
 # ------------------------------------------------------------
 # 提交限制
