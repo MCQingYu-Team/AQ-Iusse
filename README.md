@@ -222,8 +222,8 @@ https://github.com/MCQingYu-Team/QY-SERVER-IUSSE/issues/12
 **超时提醒管理员** —— Issue 超过 `tracking.sla.hours` 小时仍未关闭时，控制台与已启用的渠道（QQ 群 / Discord）会收到提醒：
 
 ```
-[AQIssue] [反馈超时] 以下反馈已提交超过 24 小时仍未处理：
- #12 服务器卡顿 (Bug 反馈) 已等待 26 小时
+[AQIssue] [反馈超时] 以下反馈已提交超过 48 小时仍未处理：
+ #12 服务器卡顿 (Bug 反馈) 已等待 52 小时
  处理地址：https://github.com/MCQingYu-Team/QY-SERVER-IUSSE/issues/12
 ```
 
@@ -241,7 +241,7 @@ tracking:
   queue-offline: true
   sla:
     enabled: true
-    hours: 24               # 超过 24 小时算超时
+    hours: 48               # 超过 48 小时算超时
     repeat-hours: 24        # 每 24 小时重复提醒一次
     broadcast: true         # 除控制台外也发到 QQ / Discord
 ```

@@ -147,7 +147,7 @@ public class PluginConfig {
         notifyOnComment = config.getBoolean("tracking.notify-on-comment", true);
         announceOnClose = config.getBoolean("tracking.announce-on-close", true);
         slaEnabled = config.getBoolean("tracking.sla.enabled", true);
-        slaHours = Math.max(1, config.getInt("tracking.sla.hours", 24));
+        slaHours = Math.max(1, config.getInt("tracking.sla.hours", 48));
         slaRepeatHours = Math.max(1, config.getInt("tracking.sla.repeat-hours", 24));
         slaBroadcast = config.getBoolean("tracking.sla.broadcast", true);
 

@@ -119,7 +119,7 @@ tracking:
   sla:
     enabled: true
     # 超过多少小时仍未关闭就提醒管理员
-    hours: 24
+    hours: 48
     # 同一个 Issue 的重复提醒间隔（小时）
     repeat-hours: 24
     # 除控制台外，是否也发到已启用的渠道（QQ 群 / Discord）
