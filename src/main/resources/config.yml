@@ -147,7 +147,11 @@ submit:
   cooldown-seconds: 300
   # 拥有该权限的玩家不受提交限制（冷却 + 长度校验），留空表示不启用
   bypass-permission: "aqissue.admin"
-  # 标题长度限制（对话框直接限制输入长度
+  # 标题长度限制（对话框直接限制输入长度）
+  min-title-length: 4
+  max-title-length: 60
+  # 正文最大长度
+  max-body-length: 800
   # /iusse reply 单条回复的最大长度
   max-reply-length: 300
 
@@ -160,7 +164,24 @@ submit:
   # 自动给正文里的 IP / QQ / 手机号 / 邮箱打码（反馈通常落在公开仓库里）。
   # 单个分类可以用 mask: false 单独关掉，见下面 categories 段。
   mask-sensitive: true
-# mask      该分类是否参与隐私打码，默认 true；举报投诉要保留 QQ 号，所以关掉
+
+  # 所有渠道都投递失败时（多半是网络抖动），把这条反馈存盘等待自动重发
+  retry-queue: true
+  # 重试的检查间隔（分钟）
+  retry-interval-minutes: 10
+  # 同一条反馈最多重试几次，超过就放弃并告知玩家
+  retry-max-attempts: 5
+  # 反馈在重发队列里最多保留多少小时
+  retry-keep-hours: 72
+
+# ------------------------------------------------------------
+# 反馈分类（对话框里「反馈分类」下拉框的选项）
+# ------------------------------------------------------------
+# id          用于 /iusse submit <id> ...，也是写入 GitHub 的标签来源
+# name        下拉框中显示的名字
+# description 一句话说明，会拼在名字后面展示
+# labels      该分类额外附加的 GitHub 标签（同样需要仓库里已存在）
+# mask        该分类是否参与隐私打码，默认 true；举报投诉要保留 QQ 号，所以关掉
 # 注意：labels 里的标签必须已经在仓库里创建好，否则 GitHub 会静默忽略
 categories:
   - id: "bug"
@@ -177,29 +198,8 @@ categories:
     name: "举报投诉"
     description: "违规行为、玩家纠纷、管理投诉"
     labels: ["report"]
-    # 举报内容里的 QQ 号 / 玩家名是必要的证据，不打码
-    mask: false----------------------------------------
-# 反馈分类（对话框里「反馈分类」下拉框的选项）
-# ------------------------------------------------------------
-# id        用于 /iusse submit <id> ...，也是写入 GitHub 的标签来源
-# name      下拉框中显示的名字
-# description 一句话说明，会拼在名字后面展示
-# labels    该分类额外附加的 GitHub 标签
-categories:
-  - id: "bug"
-    name: "Bug 反馈"
-    description: "报错、闪退、功能异常、卡顿"
-    labels: ["bug"]
-
-  - id: "feature"
-    name: "功能建议"
-    description: "希望服务器新增或优化的内容"
-    labels: ["enhancement"]
-
-  - id: "report"
-    name: "举报投诉"
-    description: "违规行为、玩家纠纷、管理投诉"
-    labels: ["report"]
+    # 举报内容里的 QQ 号是必要证据，不打码
+    mask: false
 
   - id: "other"
     name: "其它问题"
