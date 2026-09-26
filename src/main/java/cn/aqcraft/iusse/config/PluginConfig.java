@@ -77,6 +77,10 @@ public class PluginConfig {
     private List<Long> onebotGroupIds;
     private List<Long> onebotPrivateIds;
     private long onebotTimeoutMillis;
+    /** 群里发反馈时 @ 提交者（需 EasyBot 能查到他的 QQ）。 */
+    private boolean onebotMentionPlayer;
+    /** 群里发反馈时顺带显示提交者的 QQ 号。 */
+    private boolean onebotShowPlayerQq;
 
     // 反馈跟踪（Issue 状态回传 + SLA 提醒）
     private boolean trackingEnabled;
@@ -167,6 +171,8 @@ public class PluginConfig {
             onebotPrivateIds = Collections.emptyList();
         }
         onebotTimeoutMillis = Math.max(1000L, config.getLong("channels.onebot.timeout-millis", 8000L));
+        onebotMentionPlayer = config.getBoolean("channels.onebot.mention-player", true);
+        onebotShowPlayerQq = config.getBoolean("channels.onebot.show-player-qq", true);
 
         trackingEnabled = config.getBoolean("tracking.enabled", true);
         trackingIntervalMinutes = Math.max(1, config.getInt("tracking.interval-minutes", 10));
@@ -516,6 +522,16 @@ public class PluginConfig {
 
     public long getOneBotTimeoutMillis() {
         return onebotTimeoutMillis;
+    }
+
+    /** 群里发反馈时是否 @ 提交者（需 EasyBot 能查到他的 QQ；查不到就不 @）。 */
+    public boolean isOneBotMentionPlayer() {
+        return onebotMentionPlayer;
+    }
+
+    /** 群里发反馈时是否顺带把提交者的 QQ 号写在消息里。 */
+    public boolean isOneBotShowPlayerQq() {
+        return onebotShowPlayerQq;
     }
 
     /** 按配置构造代理对象，未启用时返回 {@code null}。 */

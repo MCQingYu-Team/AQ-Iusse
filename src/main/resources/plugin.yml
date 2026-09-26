@@ -22,6 +22,7 @@ commands:
       /iusse stats        反馈统计（管理员）
       /iusse test         自检各渠道（管理员）
       /iusse qq <玩家>    查询玩家绑定的 QQ（管理员）
+      /iusse at <玩家>    在 QQ 群里 @ 该玩家（管理员）
       /iusse status       查看各渠道状态（管理员）
       /iusse url          查看仓库地址
       /iusse reload       重载配置（管理员）

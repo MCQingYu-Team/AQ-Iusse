@@ -18,6 +18,7 @@ import org.bukkit.entity.Player;
 
 import cn.aqcraft.iusse.AqIssuePlugin;
 import cn.aqcraft.iusse.channel.Channel;
+import cn.aqcraft.iusse.channel.OneBotChannel;
 import cn.aqcraft.iusse.config.Category;
 import cn.aqcraft.iusse.config.PluginConfig;
 import cn.aqcraft.iusse.github.GitHubApi;
@@ -44,15 +45,16 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
     private static final String USAGE_REPLY = "/iusse reply <编号> <内容>";
     private static final String USAGE_CLOSE = "/iusse close <编号> [理由]";
     private static final String USAGE_QQ = "/iusse qq <玩家> [测试消息]";
+    private static final String USAGE_AT = "/iusse at <玩家> [消息]";
     private static final String USAGE_LIST = "/iusse list [open|closed|all]";
 
     private static final List<String> SUB_COMMANDS =
             Arrays.asList("submit", "mine", "reply", "url", "status", "list", "close", "stats", "test", "qq",
-                    "reload", "help");
+                    "at", "reload", "help");
 
     /** 只有管理员能用的子指令。 */
     private static final List<String> ADMIN_SUB_COMMANDS =
-            Arrays.asList("status", "list", "close", "stats", "test", "qq", "reload");
+            Arrays.asList("status", "list", "close", "stats", "test", "qq", "at", "reload");
 
     private final AqIssuePlugin plugin;
 
@@ -118,6 +120,11 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
             case "qq":
                 if (requireAdmin(player)) {
                     handleQq(player, args);
+                }
+                return true;
+            case "at":
+                if (requireAdmin(player)) {
+                    handleAt(player, args);
                 }
                 return true;
             case "reload":
@@ -597,6 +604,88 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
         });
     }
 
+    /**
+     * {@code /iusse at <玩家> [消息]} —— 在 QQ 群里 @ 某玩家。
+     * <p>
+     * 专用来验证「EasyBot 查 QQ → OneBot 发群消息带 @」这条链路：
+     * 它走的是和真实反馈完全一样的路径（同一个 EasyBot 查询、同一个渠道发送），
+     * 只是内容换成一句测试消息。
+     */
+    private void handleAt(final Player player, String[] args) {
+        if (args.length < 2) {
+            plugin.send(player, "command.invalid-syntax", "usage", USAGE_AT);
+            return;
+        }
+        final String target = args[1];
+        final String message = args.length >= 3
+                ? join(args, 2).trim()
+                : plugin.getLang().plain("qq.at-default-message");
+
+        plugin.send(player, "qq.checking", "player", target);
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+            @Override
+            public void run() {
+                final boolean easybot = EasyBotBridge.isAvailable();
+                final boolean ready = easybot && EasyBotBridge.isReady();
+                final boolean queryable = ready && !EasyBotBridge.getQueryStrategy().isEmpty();
+                final String easybotDetail = easybot
+                        ? EasyBotBridge.queryFailureSummary() : EasyBotBridge.getFailureReason();
+                final long qq = queryable ? EasyBotBridge.queryQq(target) : 0L;
+
+                boolean delivered = false;
+                String failure = null;
+                if (qq > 0) {
+                    // CQ 码是 OneBot 专有的，只发给 OneBot 渠道，别把 [CQ:at,...] 塞进 Discord
+                    String text = "[CQ:at,qq=" + qq + "] " + message;
+                    for (Channel channel : plugin.getChannelManager().getChannels()) {
+                        if (!OneBotChannel.ID.equals(channel.getId())) {
+                            continue;
+                        }
+                        try {
+                            if (channel.notifyAdmins(text, true, false)) {
+                                delivered = true;
+                            }
+                        } catch (Throwable throwable) {
+                            failure = describe(throwable);
+                        }
+                    }
+                }
+
+                final boolean sent = delivered;
+                final String sendFailure = failure;
+                final long account = qq;
+
+                Bukkit.getScheduler().runTask(plugin, new Runnable() {
+                    @Override
+                    public void run() {
+                        if (!player.isOnline()) {
+                            return;
+                        }
+                        if (!easybot) {
+                            plugin.send(player, "qq.easybot-missing", "detail", easybotDetail);
+                            return;
+                        }
+                        if (!queryable) {
+                            plugin.send(player, ready ? "qq.easybot-no-query" : "qq.easybot-not-ready",
+                                    "detail", easybotDetail);
+                            return;
+                        }
+                        if (account <= 0) {
+                            plugin.send(player, "qq.unbound", "player", target);
+                            return;
+                        }
+                        if (sent) {
+                            plugin.send(player, "qq.at-sent", "qq", account);
+                        } else {
+                            plugin.send(player, "qq.at-failed",
+                                    "detail", sendFailure == null ? "没有可用的 QQ 群渠道" : sendFailure);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
     private void handleStatus(final Player player) {
         plugin.send(player, "status.checking");
         final List<Channel> channels = plugin.getChannelManager().getChannels();
@@ -724,7 +813,7 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                 }
                 return result;
             }
-            if ("qq".equals(sub)) {
+            if ("qq".equals(sub) || "at".equals(sub)) {
                 for (Player online : Bukkit.getOnlinePlayers()) {
                     if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) {
                         result.add(online.getName());

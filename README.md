@@ -23,10 +23,11 @@
  ▶ QQ 群 - 已发送到 1 个 QQ 群
 ```
 
-QQ 群里收到的消息（末尾会自动带上刚创建的 Issue 地址）：
+QQ 群里收到的消息（自动 @ 提交者，并带上刚创建的 Issue 地址）：
 
 ```
-【Bug 反馈】服务器卡顿
+@xcbro 【Bug 反馈】服务器卡顿
+提交者 QQ：164907681
 玩家：xcbro
 分类：Bug 反馈
 服务端：Paper 26.2 (git-Paper-xxx)
@@ -36,6 +37,10 @@ QQ 群里收到的消息（末尾会自动带上刚创建的 Issue 地址）：
 
 https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 ```
+
+@ 需要 EasyBot 能查到该玩家绑定的 QQ（见下文「EasyBot 联动」）。
+查不到就不 @、也不显示 QQ 行，其余内容照常。
+私信给管理员的副本不带 @ 与 QQ 行 —— 那是给管理员看的，没必要。
 
 > [!NOTE]
 > 渠道是按 `GitHub → Discord → QQ` 的顺序投递的，所以 Discord 和 QQ 的消息里能带上
@@ -288,7 +293,8 @@ github:                      # 仓库信息与 Issue 模板
 channels:                    # 三个投递渠道，见上文
   github: { enabled: true, token: "" }          # Fine-grained PAT
   discord: { enabled: false, webhook-url: "", username: "服务器反馈", embed-color: 5793266 }
-  onebot: { enabled: false, mode: "server", bind: "127.0.0.1", port: 6700, path: "/onebot", url: "", access-token: "", group-ids: [], private-ids: [] }
+  onebot: { enabled: false, mode: "server", bind: "127.0.0.1", port: 6700, path: "/onebot", url: "", access-token: "", group-ids: [], private-ids: [],
+            mention-player: true, show-player-qq: true }   # 群里 @ 提交者 + 显示其 QQ
 
 submit:
   cooldown-seconds: 300      # 同一玩家的冷却，0 表示不限制
@@ -351,14 +357,35 @@ categories:                  # 对话框里的「反馈分类」下拉项
 
 ```
 /iusse qq xcbro
-[AQIssue] 玩家 xcbro 绑定的 QQ：12345678
+[AQIssue] 玩家 xcbro 绑定的 QQ：164907681
 
 /iusse qq xcbro 这是一条测试消息
-[AQIssue] 测试私信已发送到 12345678，去 QQ 上看看收到没有。
+[AQIssue] 测试私信已发送到 164907681，去 QQ 上看看收到没有。
 ```
 
 第二个参数是可选的：填了就会往那个 QQ 发一条私信，用来验证 OneBot 通路。
 输入玩家名时支持 Tab 补全（提示当前在线玩家）。
+
+### 在群里 @ 玩家：`/iusse at <玩家> [消息]`
+
+反馈投递到 QQ 群时会自动 @ 提交者（见上文「支持渠道」的群消息示例）。
+这条指令用来**单独验证 @ 链路** —— 它走的是和真实反馈完全一样的路径
+（同一个 EasyBot 查询、同一个渠道发送），只是内容换成一句测试消息：
+
+```
+/iusse at xcbro
+[AQIssue] 已在 QQ 群里 @ 164907681，去群里看看收到没有。
+
+/iusse at xcbro 你自己来看看这条反馈
+```
+
+群消息实际发出的是 `[CQ:at,qq=164907681] 你自己来看看这条反馈` ——
+`[CQ:at,qq=...]` 是 OneBot v11 的通用写法，NapCat / Lagrange / go-cqhttp 都认。
+
+> [!NOTE]
+> @ 依赖 EasyBot 查到该玩家绑定的 QQ。没绑定、EasyBot 不可用、或
+> `channels.onebot.mention-player: false` 时都不会 @，消息其余部分照常发出。
+> CQ 码只发给 OneBot 渠道，不会漏进 Discord。
 
 ### 在游戏里处理反馈
 
@@ -448,6 +475,7 @@ GitHub 未认证限额只有 60/小时，认证后是 5000/小时。跟踪轮询
 | `/iusse stats` | 提交量 / 待处理 / 超时 / 平均处理时长 / 待重发 | `aqissue.admin` |
 | `/iusse test` | 逐项自检 GitHub、标签、各渠道、EasyBot 与队列 | `aqissue.admin` |
 | `/iusse qq <玩家> [测试消息]` | 查玩家绑定的 QQ，可顺手发一条测试私信 | `aqissue.admin` |
+| `/iusse at <玩家> [消息]` | 在 QQ 群里 @ 该玩家（验证 @ 链路） | `aqissue.admin` |
 | `/iusse status` | 逐个检查已启用渠道 | `aqissue.admin` |
 | `/iusse reload` | 重载 `config.yml` 与 `lang.yml`，并重建渠道 | `aqissue.admin` |
 | `/iusse help` | 显示帮助 | `aqissue.use` |
