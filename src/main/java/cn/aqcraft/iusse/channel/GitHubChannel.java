@@ -7,15 +7,15 @@ import java.util.List;
 import java.util.Map;
 
 import cn.aqcraft.iusse.config.PluginConfig;
-import cn.aqcraft.iusse.github.GitHubAppAuth;
 import cn.aqcraft.iusse.github.MiniJson;
 import cn.aqcraft.iusse.net.Http;
 
 /**
- * GitHub 通道：在目标仓库创建 Issue。
+ * GitHub 通道：用 PAT 在目标仓库创建 Issue。
  * <p>
- * 默认使用 **GitHub App**（机器人身份，token 自动轮换），
- * 也保留一条 PAT 的应急路径（{@code auth-type: token}）。
+ * 只需要一个 Fine-grained personal access token，权限给到目标仓库的
+ * {@code Repository permissions → Issues: Read and write} 即可，
+ * 不需要建 GitHub App、不需要私钥文件。
  */
 public class GitHubChannel implements Channel {
 
@@ -24,7 +24,6 @@ public class GitHubChannel implements Channel {
     private final PluginConfig config;
     private final String userAgent;
     private final Proxy proxy;
-    private final GitHubAppAuth appAuth;
     private final String disabledReason;
 
     public GitHubChannel(PluginConfig config, String userAgent) {
@@ -32,27 +31,14 @@ public class GitHubChannel implements Channel {
         this.userAgent = userAgent;
         this.proxy = config.resolveProxy();
 
-        GitHubAppAuth auth = null;
         String reason = null;
-
         if (!config.isGitHubEnabled()) {
             reason = "配置中未启用";
         } else if (!config.isRepoConfigured()) {
             reason = "github.owner / github.repo 未配置";
-        } else if (config.isGitHubUsingApp()) {
-            try {
-                auth = new GitHubAppAuth(config.getApiBase(),
-                        config.getGitHubAppId(),
-                        config.getGitHubInstallationId(),
-                        config.getGitHubPrivateKey(),
-                        config.getTimeoutMillis(),
-                        proxy,
-                        userAgent);
-            } catch (Exception e) {
-                reason = "App 私钥不可用：" + e.getMessage();
-            }
+        } else if (!config.hasToken()) {
+            reason = "未填写 channels.github.token（PAT）";
         }
-        this.appAuth = auth;
         this.disabledReason = reason;
     }
 
@@ -88,8 +74,6 @@ public class GitHubChannel implements Channel {
 
     @Override
     public ChannelResult submit(Submission submission) throws IOException {
-        String credential = resolveCredential();
-
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("title", submission.getTitle());
         payload.put("body", submission.toMarkdown());
@@ -99,7 +83,7 @@ public class GitHubChannel implements Channel {
         }
 
         String url = config.getApiBase() + "/repos/" + config.getOwner() + "/" + config.getRepo() + "/issues";
-        Http.Response response = Http.postJson(url, authHeaders(credential),
+        Http.Response response = Http.postJson(url, authHeaders(),
                 MiniJson.write(payload), config.getTimeoutMillis(), proxy);
 
         if (!response.isSuccess()) {
@@ -120,45 +104,21 @@ public class GitHubChannel implements Channel {
 
     @Override
     public String checkStatus() throws IOException {
-        String credential = resolveCredential();
         String url = config.getApiBase() + "/repos/" + config.getOwner() + "/" + config.getRepo();
-        Http.Response response = Http.get(url, authHeaders(credential), config.getTimeoutMillis(), proxy);
+        Http.Response response = Http.get(url, authHeaders(), config.getTimeoutMillis(), proxy);
         if (!response.isSuccess()) {
             throw new IOException(describeApiError(response));
         }
-        String mode = config.isGitHubUsingApp() ? "GitHub App 机器人" : "PAT";
-        return mode + " | 剩余限额 " + response.getRateRemaining();
+        return "PAT 认证通过 | 剩余限额 " + response.getRateRemaining();
     }
 
-    /** 取当前可用的凭据：App 走 installation token，否则走配置里的 PAT。 */
-    private String resolveCredential() throws IOException {
-        if (config.isGitHubUsingApp()) {
-            if (appAuth == null) {
-                throw new IOException(getDisabledReason());
-            }
-            return appAuth.getToken();
-        }
-        if (!config.hasToken()) {
-            throw new IOException("既未配置 GitHub App，也没有填写应急 PAT");
-        }
-        return config.getToken().trim();
-    }
-
-    private Map<String, String> authHeaders(String credential) {
+    private Map<String, String> authHeaders() {
         Map<String, String> headers = new LinkedHashMap<String, String>();
-        headers.put("Authorization", "Bearer " + credential);
+        headers.put("Authorization", "Bearer " + config.getToken().trim());
         headers.put("Accept", "application/vnd.github+json");
         headers.put("X-GitHub-Api-Version", "2022-11-28");
         headers.put("User-Agent", userAgent);
         return headers;
-    }
-
-    /** 供 /iusse status 展示机器人身份。 */
-    public String describeAuth() {
-        if (!config.isGitHubUsingApp()) {
-            return config.hasToken() ? "PAT（应急模式）" : "未配置";
-        }
-        return appAuth == null ? "App 未就绪" : appAuth.describe();
     }
 
     private String describeApiError(Http.Response response) {
@@ -171,13 +131,15 @@ public class GitHubChannel implements Channel {
         String hint;
         switch (response.getCode()) {
             case 401:
-                hint = "凭据无效，请检查 GitHub App 私钥或 installation-id";
+                hint = "PAT 无效或已过期，请重新生成并更新 channels.github.token";
                 break;
             case 403:
-                hint = "权限不足，或触发了 API 限流";
+                hint = "0".equals(response.getRateRemaining())
+                        ? "API 访问次数已用尽，请稍后再试"
+                        : "权限不足，请确认 PAT 拥有该仓库的 Issues: Read and write";
                 break;
             case 404:
-                hint = "仓库不存在，或 App 未被授予该仓库的访问权限";
+                hint = "仓库不存在，或 PAT 未被授权访问该仓库";
                 break;
             case 410:
                 hint = "该仓库已关闭 Issues 功能";

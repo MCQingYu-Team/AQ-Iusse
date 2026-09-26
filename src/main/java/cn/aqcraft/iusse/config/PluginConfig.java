@@ -1,17 +1,11 @@
 package cn.aqcraft.iusse.config;
 
-import java.io.File;
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.logging.Level;
 
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -47,14 +41,8 @@ public class PluginConfig {
     private int maxTitleLength;
     private int maxBodyLength;
 
-    // 渠道：GitHub App / PAT
+    // 渠道：GitHub（PAT）
     private boolean githubEnabled;
-    private String githubAuthType;
-    private String githubAppId;
-    private long githubInstallationId;
-    private String githubPrivateKey;
-    /** 是否因为 App 未配置而自动退回到了 PAT 模式（仅用于启动提示）。 */
-    private boolean legacyCredential;
 
     // 渠道：Discord Webhook
     private boolean discordEnabled;
@@ -104,20 +92,10 @@ public class PluginConfig {
         maxBodyLength = Math.max(16, config.getInt("submit.max-body-length", 800));
 
         githubEnabled = config.getBoolean("channels.github.enabled", true);
-        githubAuthType = config.getString("channels.github.auth-type", "app").trim().toLowerCase(Locale.ROOT);
-        githubAppId = config.getString("channels.github.app-id", "").trim();
-        githubInstallationId = parseLong(config.getString("channels.github.installation-id", ""));
-        githubPrivateKey = loadPrivateKey(config);
-
-        // 凭据解析：优先 GitHub App；App 没配好但手上有 PAT 时自动退回 PAT 模式，
-        // 这样从旧版本升级上来的配置不会突然失效。
+        // 兼容更早的写法：token 写在 channels.github.token，旧配置写在顶层 github.token
         token = config.getString("channels.github.token", "").trim();
         if (token.isEmpty()) {
             token = config.getString("github.token", "").trim();
-        }
-        if ("app".equals(githubAuthType) && !isAppConfigComplete() && !token.isEmpty()) {
-            githubAuthType = "token";
-            legacyCredential = true;
         }
 
         discordEnabled = config.getBoolean("channels.discord.enabled", false);
@@ -137,39 +115,6 @@ public class PluginConfig {
         onebotTimeoutMillis = Math.max(1000L, config.getLong("channels.onebot.timeout-millis", 8000L));
 
         categories = readCategories(config);
-    }
-
-    /** 读 App 私钥：优先 channels.github.private-key-file，否则用内联的 private-key。 */
-    private String loadPrivateKey(FileConfiguration config) {        String inline = config.getString("channels.github.private-key", "");
-        String fileName = config.getString("channels.github.private-key-file", "").trim();
-        if (fileName.isEmpty()) {
-            return inline;
-        }
-        File file = new File(fileName);
-        if (!file.isAbsolute()) {
-            file = new File(plugin.getDataFolder(), fileName);
-        }
-        if (!file.isFile()) {
-            plugin.getLogger().warning("找不到 GitHub App 私钥文件：" + file.getAbsolutePath());
-            return inline;
-        }
-        try {
-            return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            plugin.getLogger().log(Level.WARNING, "读取 GitHub App 私钥失败：" + file.getAbsolutePath(), e);
-            return inline;
-        }
-    }
-
-    private static long parseLong(String value) {
-        if (value == null) {
-            return 0L;
-        }
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException ignored) {
-            return 0L;
-        }
     }
 
     private List<Category> readCategories(FileConfiguration config) {
@@ -297,37 +242,8 @@ public class PluginConfig {
     // 渠道配置
     // ------------------------------------------------------------------
 
-    /** App 凭据是否填写完整。 */
-    public boolean isAppConfigComplete() {
-        return githubAppId != null && !githubAppId.isEmpty()
-                && githubInstallationId > 0
-                && githubPrivateKey != null && !githubPrivateKey.trim().isEmpty();
-    }
-
-    /** 是否已从 App 自动退回 PAT 模式。 */
-    public boolean isUsingLegacyCredential() {
-        return legacyCredential;
-    }
-
     public boolean isGitHubEnabled() {
         return githubEnabled;
-    }
-
-    /** true 表示用 GitHub App 机器人身份提交。 */
-    public boolean isGitHubUsingApp() {
-        return "app".equals(githubAuthType);
-    }
-
-    public String getGitHubAppId() {
-        return githubAppId;
-    }
-
-    public long getGitHubInstallationId() {
-        return githubInstallationId;
-    }
-
-    public String getGitHubPrivateKey() {
-        return githubPrivateKey == null ? "" : githubPrivateKey;
     }
 
     public boolean isDiscordEnabled() {

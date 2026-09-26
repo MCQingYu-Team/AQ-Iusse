@@ -9,7 +9,7 @@
      ├─ 反馈分类   （下拉选择，来自 config.yml）
      ├─ 标题       （单行输入）
      ├─ 详细内容   （多行输入）
-     └─ 提交 ──┬──► GitHub   │ GitHub App 机器人 → 新建 Issue
+     └─ 提交 ──┬──► GitHub   │ PAT → 新建 Issue
                ├──► Discord  │ 频道 Webhook
                └──► QQ 群    │ OneBot 反向 WebSocket
 ```
@@ -46,7 +46,7 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 
 | 渠道 | 接入方式 | 特点 |
 | --- | --- | --- |
-| **GitHub** | GitHub App（机器人身份） | token 一小时自动轮换、**永不过期**，Issue 显示为 `你的App[bot]` 提交；无需人工续期 |
+| **GitHub** | Fine-grained PAT | 只需给目标仓库勾一个 `Issues: Read and write`，一分钟建好；不用建 App、不用私钥文件 |
 | **Discord** | 频道 Webhook | 不需要机器人常驻在线，复制一个 URL 就能用 |
 | **QQ** | OneBot **反向** WebSocket | 插件监听端口，NapCat / go-cqhttp 主动连过来；插件侧不需要装任何 QQ 协议库 |
 
@@ -58,10 +58,10 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 | --- | --- |
 | 原生对话框 | 基于 Paper Dialog API，由客户端渲染，服务端零 GUI 开销，也不会和其他 GUI 插件抢界面 |
 | 单 jar 跨版本 | 一份产物覆盖 Paper 1.21.7 至最新版（含 26.x） |
-| 玩家零门槛 | 玩家不需要任何账号，服务器统一持有一个机器人凭据 |
+| 玩家零门槛 | 玩家不需要任何账号，服务器统一持有一个凭据 |
 | 来源可追溯 | 各渠道的消息都会带上玩家名、UUID、分类、服务端版本与提交时间 |
 | 单语言文件 | 所有面向玩家的文案都在 `lang.yml`，改文案不用碰代码和 `config.yml` |
-| 零第三方依赖 | HTTP 用 `HttpURLConnection`、JSON 自写、WebSocket 服务端自写、JWT 用 JDK 自带 `SHA256withRSA` |
+| 零第三方依赖 | HTTP 用 `HttpURLConnection`、JSON 自写、WebSocket 服务端自写，无任何外部依赖 |
 
 ## 兼容性
 
@@ -87,21 +87,18 @@ Dialog 相关类的签名，**两者完全一致**，因此没有版本分支代
 3. 按下面的说明配置 `plugins/AQIssue/config.yml`。
 4. 执行 `/iusse reload`，再用 `/iusse status` 验证三个渠道。
 
-## 配置 GitHub App
+## 配置 GitHub PAT
 
 > [!IMPORTANT]
-> 用的是 GitHub **App**（机器人），不是 PAT。区别在于：App 的 token 由插件自己按需申请、
-> 一小时自动轮换，**不会像 PAT 那样到期失效**，也不会因为个人离职/换号而中断。
+> 用的是 **Fine-grained personal access token**，只给它目标仓库的 `Issues: Read and write` 权限，
+> 不要用 classic token 的 `repo` 全权限。
 
-1. 打开 <https://github.com/settings/apps> → **New GitHub App**
-2. 名字随意（例如 `AQIssue Bot`），Homepage URL 填仓库地址
-3. 把 **Webhook → Active 取消勾选**（插件用不到）
-4. **Permissions → Repository permissions → Issues** 设为 **Read and write**，其余保持 No access
-5. 点 **Create GitHub App**，记下页面顶部的 **App ID**
-6. 页面下方 **Private keys → Generate a private key**，下载得到 `xxx.pem`，
-   放到 `plugins/AQIssue/github-app.pem`
-7. 左侧 **Install App** → 选择账号 → *Only select repositories* → 勾选目标仓库 → **Install**
-8. 安装完成后地址栏形如 `.../settings/installations/12345678`，其中的数字就是 **Installation ID**
+1. 打开 <https://github.com/settings/personal-access-tokens> → **Fine-grained tokens** → **Generate new token**
+2. **Token name** 随意（例如 `AQIssue`），**Expiration** 建议 90 天或自定义
+3. **Repository access** 选 *Only select repositories* → 勾上目标仓库
+4. **Permissions → Repository permissions → Issues** 设为 **Read and write**
+   （`Metadata: Read-only` 会被自动勾上，那是 GitHub 强制项；**Account permissions 一个都不用勾**）
+5. 点 **Generate token**，**立刻复制**（离开页面后不再显示）
 
 填进配置：
 
@@ -109,16 +106,12 @@ Dialog 相关类的签名，**两者完全一致**，因此没有版本分支代
 channels:
   github:
     enabled: true
-    auth-type: "app"
-    app-id: "1234567"
-    installation-id: "12345678"
-    private-key-file: "github-app.pem"
+    token: "github_pat_xxxxxxxxxxxx"
 ```
 
-> [!TIP]
-> 私钥支持 PKCS#1（`BEGIN RSA PRIVATE KEY`）与 PKCS#8（`BEGIN PRIVATE KEY`）两种格式，
-> 从 GitHub 直接下载的文件原样使用即可，**不需要 `openssl` 转换**。
-> 不想把私钥落盘时，也可以删掉 `private-key-file`，把 PEM 内容整个粘贴到 `private-key` 里。
+> [!WARNING]
+> `config.yml` 里保存的是**明文 token**，请确保 `plugins/AQIssue/` 只有服务端进程可读，
+> 不要把 `config.yml` 提交到公开仓库。Token 过期或泄露时，在 GitHub 上吊销并重新生成。
 
 ## 配置 Discord Webhook
 
@@ -194,7 +187,7 @@ github:                      # 仓库信息与 Issue 模板
     port: 7890
 
 channels:                    # 三个投递渠道，见上文
-  github: { enabled: true, auth-type: "app", app-id: "", installation-id: "", private-key-file: "github-app.pem" }
+  github: { enabled: true, token: "" }          # Fine-grained PAT
   discord: { enabled: false, webhook-url: "", username: "服务器反馈", embed-color: 5793266 }
   onebot: { enabled: false, bind: "127.0.0.1", port: 6700, path: "/onebot", access-token: "", group-ids: [] }
 
@@ -237,14 +230,14 @@ categories:                  # 对话框里的「反馈分类」下拉项
 
 ```
 [AQIssue] 投递渠道状态：
- [正常] GitHub - GitHub App 机器人 | 剩余限额 4998
+ [正常] GitHub - PAT 认证通过 | 剩余限额 4998
  [正常] Discord - Webhook 可用
  [异常] QQ 群 - 已监听 127.0.0.1:6700，但暂无客户端连接
 ```
 
 > [!IMPORTANT]
-> `config.yml` 里保存着 GitHub App 私钥路径与会话凭据，请确保 `plugins/AQIssue/`
-> 只有服务端进程可读，并且不要把私钥提交到公开仓库。
+> `config.yml` 里保存着明文 PAT，请确保 `plugins/AQIssue/` 只有服务端进程可读，
+> 并且不要把 `config.yml` 提交到公开仓库。
 
 ## 构建
 
@@ -272,10 +265,7 @@ src/main/java/cn/aqcraft/iusse/
 │   ├─ GitHubChannel.java          GitHub Issue
 │   ├─ DiscordChannel.java         Discord Webhook
 │   └─ OneBotChannel.java          OneBot 反向 WebSocket 服务端
-├─ github/
-│   ├─ GitHubAppAuth.java          JWT(RS256) → installation token，自动续期
-│   ├─ Pem.java                    PKCS#1 / PKCS#8 私钥解析
-│   └─ MiniJson.java               极简 JSON 编解码
+├─ github/MiniJson.java            极简 JSON 编解码
 ├─ net/
 │   ├─ Http.java                   共用 HTTP 客户端
 │   └─ WebSocketConnection.java    手写 WebSocket 服务端连接
@@ -294,11 +284,13 @@ src/main/java/cn/aqcraft/iusse/
 若重启后仍如此，检查日志里有没有 `[AQIssue] 指令注册成功` 这一行。
 
 **GitHub 渠道报 404？**
-App 没有安装到该仓库，或安装时没勾选这个仓库。到 App 设置的 Install App 里补上。
+PAT 没有被授权访问该仓库 —— 到 token 设置里的 Repository access 把仓库勾上。
 
 **GitHub 渠道报 401？**
-App ID、Installation ID 或私钥有一项不对。注意 App ID 是「App 页面顶部」的数字，
-Installation ID 是「安装后地址栏里」的数字，两者不同。
+PAT 无效或已过期，重新生成一个并更新 `channels.github.token`。
+
+**GitHub 渠道报 403？**
+PAT 的 Issues 权限给成了 `Read-only`，改成 `Read and write`；也可能是 API 限额用尽。
 
 **Discord 报 404 / 401？**
 Webhook 被删除或 URL 复制不全，重新复制一次。

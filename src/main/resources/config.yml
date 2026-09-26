@@ -48,29 +48,16 @@ github:
 # 投递渠道（可同时开启，玩家一次提交会发往所有已启用的渠道）
 # ------------------------------------------------------------
 channels:
-  # GitHub Issue。默认用 GitHub App：身份是机器人，token 一小时自动轮换、永不过期，
-  # 不需要像 PAT 那样定期手动更换。
+  # GitHub Issue：用一个 Fine-grained PAT 提交，只需要目标仓库的 Issues 读写权限。
   github:
     enabled: true
-    # app   = 机器人身份（推荐）
-    # token = 应急用的 PAT，一般用不到
-    auth-type: "app"
 
-    # 创建步骤：
-    #   1) 打开 https://github.com/settings/apps → New GitHub App
-    #   2) 取消勾选 Webhook，权限只给 Repository permissions → Issues: Read and write
-    #   3) 创建后点 Install App，安装到目标仓库
-    #   4) 安装完成后地址栏里的数字就是 installation-id
-    app-id: ""
-    installation-id: ""
-
-    # App 页面下载的 .pem 私钥放到 plugins/AQIssue/ 下，这里填文件名
-    # （PKCS#1 与 PKCS#8 两种格式都支持，不需要 openssl 转换）
-    private-key-file: "github-app.pem"
-    # 也可以不落盘，直接把 PEM 内容粘在这里；两处只填一个
-    private-key: ""
-
-    # auth-type: token 时才用
+    # 创建步骤（约 1 分钟）：
+    #   1) 打开 https://github.com/settings/personal-access-tokens → Fine-grained tokens
+    #   2) Repository access 选 Only select repositories，勾上目标仓库
+    #   3) Permissions → Repository permissions → Issues 设为 Read and write
+    #      （Account permissions 一个都不用勾）
+    #   4) 生成后把 github_pat_... 粘到下面
     token: ""
 
   # Discord 频道 Webhook（不需要机器人常驻）

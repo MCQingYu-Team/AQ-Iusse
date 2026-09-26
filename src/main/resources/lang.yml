@@ -26,7 +26,7 @@ general:
   reloaded: "&a配置与语言文件已重载。"
   unknown-category: "&c未知的分类：&f{id}"
   repo-not-configured: "&c服务器尚未配置目标仓库，请联系管理员。"
-  no-token: "&c服务器尚未配置 GitHub Token，只能提交到公开仓库，请联系管理员。"
+  no-token: "&cGitHub 渠道已启用但未配置 PAT，请联系管理员。"
 
 # ------------------------------------------------------------
 # 对话框（Paper Dialog API）
@@ -34,7 +34,7 @@ general:
 # 对话框里的文字以原版界面样式渲染，这里写纯文本，不需要颜色代码。
 dialog:
   title: "提交反馈"
-  body: "选择反馈分类，填写标题与内容，点击「提交」即可直接在 GitHub 仓库创建 Issue。"
+  body: "选择反馈分类，填写标题与内容，点击「提交」即可送达服务器管理员。"
   category-label: "反馈分类"
   category-option: "{name} - {description}"
   title-label: "标题"
@@ -42,7 +42,7 @@ dialog:
   body-label: "详细内容"
   body-hint: "补充复现步骤、时间、报错信息等"
   confirm: "提交"
-  confirm-tooltip: "发送到 GitHub 仓库"
+  confirm-tooltip: "发送给服务器管理员"
   cancel: "取消"
   cancel-tooltip: "放弃本次提交"
   unsupported: "&c当前服务端不支持对话框功能，请用 &f/iusse submit <分类> <标题>|<内容> &c提交。"
@@ -87,6 +87,6 @@ command:
     - "&f/iusse &7- 打开反馈对话框"
     - "&f/iusse submit <分类> <标题>|<内容> &7- 一行式提交"
     - "&f/iusse url &7- 查看仓库地址"
-    - "&f/iusse status &7- 查看 GitHub 连接状态"
+    - "&f/iusse status &7- 查看各渠道状态"
     - "&f/iusse reload &7- 重载配置"
     - "&8&m----------------------------------------"
