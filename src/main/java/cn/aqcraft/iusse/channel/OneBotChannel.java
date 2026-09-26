@@ -55,6 +55,8 @@ public class OneBotChannel implements Channel {
     private volatile ServerSocket serverSocket;
     private volatile Thread clientThread;
     private volatile boolean running;
+    /** 已经就 token / 权限问题提示过一次，避免每 5 秒重连都刷屏。 */
+    private volatile boolean rejectionLogged;
     private final String disabledReason;
 
     public OneBotChannel(AqIssuePlugin plugin, PluginConfig config) {
@@ -298,7 +300,14 @@ public class OneBotChannel implements Channel {
         } finally {
             connections.remove(connection);
             connection.ws.close();
-            plugin.getLogger().info("OneBot 连接已断开：" + connection.remote());
+            String message = "OneBot 连接已断开：" + connection.remote();
+            // 刚连上就被断开多半是配置问题（如 token 不对），
+            // 此时错误帧已经以 WARNING 形式提示过，不必再刷一条 INFO
+            if (System.currentTimeMillis() - connection.connectedAt < 3000L) {
+                plugin.getLogger().fine(message + "（连接仅存活不到 3 秒）");
+            } else {
+                plugin.getLogger().info(message);
+            }
         }
     }
 
@@ -311,15 +320,36 @@ public class OneBotChannel implements Channel {
             Map<String, Object> json = MiniJson.parseObject(text);
             String echo = MiniJson.string(json, "echo");
             if (echo == null) {
+                // 没有 echo 的不是响应，而是事件或服务端主动报错
+                reportServerMessage(json);
                 return;
             }
             CompletableFuture<Map<String, Object>> future = connection.pending.remove(echo);
             if (future != null) {
+                rejectionLogged = false;
                 future.complete(json);
             }
         } catch (RuntimeException ignored) {
             // 非 JSON 帧直接忽略
         }
+    }
+
+    /** 把服务端主动推送的失败信息（如 token 校验失败）记到日志。 */
+    private void reportServerMessage(Map<String, Object> json) {
+        if (!"failed".equalsIgnoreCase(MiniJson.string(json, "status"))) {
+            return;
+        }
+        String wording = MiniJson.string(json, "wording");
+        if (wording == null || wording.isEmpty()) {
+            wording = MiniJson.string(json, "message");
+        }
+        if (rejectionLogged) {
+            return;
+        }
+        rejectionLogged = true;
+        plugin.getLogger().warning("OneBot 服务端拒绝了本连接：" + (wording == null ? "未知原因" : wording)
+                + "（retcode " + MiniJson.integer(json, "retcode", -1) + "）"
+                + "。请检查 channels.onebot.access-token 是否与 NapCat 侧完全一致。");
     }
 
     private boolean isAuthorized(Map<String, String> headers) {
@@ -481,6 +511,7 @@ public class OneBotChannel implements Channel {
         final WebSocketConnection ws;
         final Map<String, CompletableFuture<Map<String, Object>>> pending =
                 new ConcurrentHashMap<String, CompletableFuture<Map<String, Object>>>();
+        final long connectedAt = System.currentTimeMillis();
 
         Connection(WebSocketConnection ws) {
             this.ws = ws;
