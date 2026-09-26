@@ -208,6 +208,17 @@ channels:
 
 玩家不在线时通知会排队，等他上线自动补发（关掉 `tracking.queue-offline` 则直接丢弃）。
 
+**处理后群内播报** —— Issue 被关闭时，除了通知提交者，还会往渠道（QQ 群 / Discord）发一条：
+
+```
+[反馈已处理] #12 服务器卡顿
+分类：Bug 反馈
+提交者：xcbro
+https://github.com/MCQingYu-Team/QY-SERVER-IUSSE/issues/12
+```
+
+不想在群里播报的话，把 `tracking.announce-on-close` 改成 `false`。
+
 **超时提醒管理员** —— Issue 超过 `tracking.sla.hours` 小时仍未关闭时，控制台与已启用的渠道（QQ 群 / Discord）会收到提醒：
 
 ```
@@ -226,6 +237,7 @@ tracking:
   keep-days: 30             # 只跟踪最近 30 天提交的
   notify-on-close: true
   notify-on-comment: true
+  announce-on-close: true  # 处理完成后在渠道里播报一条
   queue-offline: true
   sla:
     enabled: true

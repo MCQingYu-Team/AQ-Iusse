@@ -110,6 +110,8 @@ tracking:
   notify-on-close: true
   # Issue 有新评论时通知当初提交的玩家
   notify-on-comment: true
+  # Issue 处理完成（被关闭）时，是否也在渠道里播报一条（QQ 群 / Discord）
+  announce-on-close: true
   # 玩家离线时把通知存起来，等他上线补发（false 则直接丢弃）
   queue-offline: true
 

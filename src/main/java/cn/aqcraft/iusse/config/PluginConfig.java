@@ -71,6 +71,7 @@ public class PluginConfig {
     private boolean trackingQueueOffline;
     private boolean notifyOnClose;
     private boolean notifyOnComment;
+    private boolean announceOnClose;
     private boolean slaEnabled;
     private int slaHours;
     private int slaRepeatHours;
@@ -144,6 +145,7 @@ public class PluginConfig {
         trackingQueueOffline = config.getBoolean("tracking.queue-offline", true);
         notifyOnClose = config.getBoolean("tracking.notify-on-close", true);
         notifyOnComment = config.getBoolean("tracking.notify-on-comment", true);
+        announceOnClose = config.getBoolean("tracking.announce-on-close", true);
         slaEnabled = config.getBoolean("tracking.sla.enabled", true);
         slaHours = Math.max(1, config.getInt("tracking.sla.hours", 24));
         slaRepeatHours = Math.max(1, config.getInt("tracking.sla.repeat-hours", 24));
@@ -307,6 +309,11 @@ public class PluginConfig {
 
     public boolean isNotifyOnComment() {
         return notifyOnComment;
+    }
+
+    /** Issue 处理完成（被关闭）时，是否也在渠道里播报一条（QQ 群 / Discord）。 */
+    public boolean isTrackingAnnounceOnClose() {
+        return announceOnClose;
     }
 
     public boolean isSlaEnabled() {

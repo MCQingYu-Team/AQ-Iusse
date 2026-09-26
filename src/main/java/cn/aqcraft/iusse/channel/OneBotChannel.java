@@ -449,14 +449,16 @@ public class OneBotChannel implements Channel {
         if (connection == null) {
             return false;
         }
+        // QQ 不认 MC 的颜色代码，统一去色后再发
+        String text = Text.plain(message);
         boolean delivered = false;
         for (Long groupId : config.getOneBotGroupIds()) {
-            if (sendTo(connection, "send_group_msg", "group_id", groupId, message)) {
+            if (sendTo(connection, "send_group_msg", "group_id", groupId, text)) {
                 delivered = true;
             }
         }
         for (Long userId : config.getOneBotPrivateIds()) {
-            if (sendTo(connection, "send_private_msg", "user_id", userId, message)) {
+            if (sendTo(connection, "send_private_msg", "user_id", userId, text)) {
                 delivered = true;
             }
         }

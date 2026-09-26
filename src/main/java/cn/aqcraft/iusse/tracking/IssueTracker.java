@@ -217,6 +217,9 @@ public class IssueTracker {
             notifyPlayer(record, plugin.getLang().prefixed("tracking.notify-closed",
                     "title", record.title,
                     "url", record.url));
+            if (plugin.getPluginConfig().isTrackingAnnounceOnClose()) {
+                announceClosed(record);
+            }
             return true;
         }
 
@@ -315,19 +318,36 @@ public class IssueTracker {
         if (!config.isSlaBroadcast()) {
             return;
         }
-        String message = plugin.getLang().text("sla.header", "hours", config.getSlaHours())
-                + "\n" + plugin.getLang().text("sla.line",
+        // 渠道不认 MC 颜色代码，这里用去色文本
+        broadcast(plugin.getLang().plain("sla.header", "hours", config.getSlaHours())
+                + "\n" + plugin.getLang().plain("sla.line",
                         "number", record.number,
                         "title", record.title,
                         "category", record.categoryName,
                         "age", ageHours)
-                + "\n" + plugin.getLang().text("sla.footer", "url", record.url);
+                + "\n" + plugin.getLang().plain("sla.footer", "url", record.url));
+    }
 
+    /** 把「已处理」的结果播报到渠道（QQ 群 / Discord）。 */
+    private void announceClosed(IssueRecord record) {
+        broadcast(plugin.getLang().plain("tracking.announce-closed",
+                "number", record.number,
+                "title", record.title,
+                "category", record.categoryName,
+                "player", record.playerName,
+                "url", record.url));
+    }
+
+    /** 向所有已启用渠道推一条纯文本通知。 */
+    private void broadcast(String message) {
+        if (message == null || message.isEmpty()) {
+            return;
+        }
         for (Channel channel : plugin.getChannelManager().getChannels()) {
             try {
                 channel.notifyAdmins(message);
             } catch (Throwable throwable) {
-                plugin.getLogger().fine("SLA 提醒经渠道 " + channel.getId() + " 发送失败："
+                plugin.getLogger().fine("通知经渠道 " + channel.getId() + " 发送失败："
                         + throwable.getMessage());
             }
         }

@@ -71,6 +71,8 @@ submit:
 tracking:
   notify-closed: "&a你提交的反馈已被处理：&f{title}\n&7{url}"
   notify-comment: "&e你提交的反馈有新回复：&f{title}\n&8{comment}\n&7{url}"
+  # 下面这条会发到 QQ 群 / Discord，写纯文本（渠道不认颜色代码）
+  announce-closed: "[反馈已处理] #{number} {title}\n分类：{category}\n提交者：{player}\n{url}"
 
 # ------------------------------------------------------------
 # 处理超时提醒（发给管理员）
