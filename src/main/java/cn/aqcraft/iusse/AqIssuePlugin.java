@@ -404,7 +404,7 @@ public class AqIssuePlugin extends JavaPlugin {
         boolean withPlayer = pluginConfig.isIncludePlayerInfo();
         String fallbackLink = pluginConfig.isGitHubEnabled() && pluginConfig.isRepoConfigured()
                 ? pluginConfig.getRepoUrl() : null;
-        return new Submission(
+        Submission submission = new Submission(
                 withPlayer ? playerName : null,
                 withPlayer ? playerUuid : null,
                 category.getId(),
@@ -415,6 +415,10 @@ public class AqIssuePlugin extends JavaPlugin {
                 pluginConfig.isIncludeServerInfo() ? Bukkit.getName() + " " + Bukkit.getVersion() : null,
                 new Date(),
                 fallbackLink);
+        // 渠道消息是「通知」，默认只留必要信息；完整记录在 GitHub Issue 里
+        submission.setChannelExtras(pluginConfig.isShowServerInChannels(),
+                pluginConfig.isShowTimeInChannels());
+        return submission;
     }
 
     /** 把反馈异步投递到所有已启用的渠道。 */

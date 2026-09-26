@@ -112,6 +112,10 @@ public class PluginConfig {
     private boolean twoStepDialog;
     private boolean dialogShowIcon;
 
+    // 渠道消息内容
+    private boolean showServerInChannels;
+    private boolean showTimeInChannels;
+
     public PluginConfig(AqIssuePlugin plugin) {
         this.plugin = plugin;
         load();
@@ -205,6 +209,9 @@ public class PluginConfig {
 
         twoStepDialog = config.getBoolean("dialog.two-step", true);
         dialogShowIcon = config.getBoolean("dialog.show-icon", true);
+
+        showServerInChannels = config.getBoolean("message.show-server", false);
+        showTimeInChannels = config.getBoolean("message.show-time", false);
     }
 
     private List<Category> readCategories(FileConfiguration config) {
@@ -413,6 +420,20 @@ public class PluginConfig {
     /** 对话框正文区是否带一个物品图标。 */
     public boolean isDialogShowIcon() {
         return dialogShowIcon;
+    }
+
+    // ------------------------------------------------------------------
+    // 渠道消息内容
+    // ------------------------------------------------------------------
+
+    /** 渠道消息（QQ / Discord）里是否带「服务端：xxx」这一行。 */
+    public boolean isShowServerInChannels() {
+        return showServerInChannels;
+    }
+
+    /** 渠道消息（QQ / Discord）里是否带「时间：xxx」这一行。 */
+    public boolean isShowTimeInChannels() {
+        return showTimeInChannels;
     }
 
     // ------------------------------------------------------------------

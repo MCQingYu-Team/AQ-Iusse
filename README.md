@@ -40,8 +40,6 @@ QQ 群里收到的消息（自动 @ 提交者，并带上刚创建的 Issue 地�
 玩家：xcbro @164907681
 QQ：164907681
 分类：Bug 反馈
-服务端：Paper 26.2 (git-Paper-xxx)
-时间：2026-09-26 22:15:03
 ——————
 在主城放方块的时候会卡一下，大概持续两秒
 
@@ -50,6 +48,11 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 
 `@164907681` 在 QQ 里会渲染成蓝色的 `@昵称`，实际拼的是 `[CQ:at,qq=164907681]`。
 因为 @ 只显示昵称看不到号码，所以下一行 `QQ：` 仍然保留数字本体。
+
+> [!NOTE]
+> 渠道消息默认**不带**「服务端」与「时间」这两行 —— 它们是通知，不是记录：
+> QQ 聊天窗口本来就带时间戳，服务端版本在 Issue 的折叠块里展开就有。
+> 想加回来就改 `message.show-server` / `message.show-time`。
 
 @ 需要 EasyBot 能查到该玩家绑定的 QQ（见下文「EasyBot 联动」）。
 绑定的 QQ 会出现在**所有渠道**里：GitHub Issue 的信息表、Discord 的嵌入正文、QQ 群消息。
@@ -311,7 +314,11 @@ channels:                    # 三个投递渠道，见上文
 
 player-qq:                   # 提交者 QQ（所有渠道共用）
   show: true                 # 在 Issue / Discord / QQ 群里显示提交者的 QQ
-  mention-in-group: true     # QQ 群里额外 @ 他
+  mention-in-group: true     # QQ 群里额外 @ 他（拼在「玩家」那一行）
+
+message:                     # 渠道消息（QQ / Discord）里显示哪些行，不影响 Issue
+  show-server: false         # 「服务端：xxx」
+  show-time: false           # 「时间：xxx」
 
 submit:
   cooldown-seconds: 300      # 同一玩家的冷却，0 表示不限制

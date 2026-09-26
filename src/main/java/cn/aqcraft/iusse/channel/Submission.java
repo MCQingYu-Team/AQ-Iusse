@@ -38,6 +38,15 @@ public class Submission {
     /** 各渠道投递成功后登记的链接。 */
     private final List<String> links = new ArrayList<String>();
 
+    /**
+     * 渠道消息（QQ / Discord）里是否带上「服务端」与「时间」这两行。
+     * <p>
+     * 默认带上；关掉后渠道消息更短 —— 渠道消息是「通知」，完整的记录在 GitHub Issue 里。
+     * 注意只影响 {@link #toPlainText}，{@link #toMarkdown} 不受影响。
+     */
+    private boolean showServerInChannels = true;
+    private boolean showTimeInChannels = true;
+
     public Submission(String playerName, String playerUuid, String categoryId, String categoryName,
                       List<String> labels, String title, String body, String serverInfo, Date time,
                       String fallbackLink) {
@@ -71,6 +80,16 @@ public class Submission {
         if (playerQq > 0) {
             this.playerQq = playerQq;
         }
+    }
+
+    /**
+     * 设置渠道消息里要不要带服务端版本与提交时间。
+     * <p>
+     * 只在 {@link #toPlainText} 生效，GitHub Issue 的正文不受影响。
+     */
+    public void setChannelExtras(boolean showServer, boolean showTime) {
+        this.showServerInChannels = showServer;
+        this.showTimeInChannels = showTime;
     }
 
     public String getCategoryId() {
@@ -254,10 +273,12 @@ public class Submission {
             builder.append("QQ：").append(playerQq).append('\n');
         }
         builder.append("分类：").append(categoryName).append('\n');
-        if (serverInfo != null && !serverInfo.isEmpty()) {
+        if (showServerInChannels && serverInfo != null && !serverInfo.isEmpty()) {
             builder.append("服务端：").append(serverInfo).append('\n');
         }
-        builder.append("时间：").append(getFormattedTime()).append('\n');
+        if (showTimeInChannels) {
+            builder.append("时间：").append(getFormattedTime()).append('\n');
+        }
         builder.append("——————\n");
         builder.append(body == null ? "" : body);
 
