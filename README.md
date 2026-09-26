@@ -48,7 +48,7 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 | --- | --- | --- |
 | **GitHub** | Fine-grained PAT | 只需给目标仓库勾一个 `Issues: Read and write`，一分钟建好；不用建 App、不用私钥文件 |
 | **Discord** | 频道 Webhook | 不需要机器人常驻在线，复制一个 URL 就能用 |
-| **QQ** | OneBot（反向 / 正向 WS 均可） | 插件侧不需要装任何 QQ 协议库；既能等 NapCat 连过来，也能由插件主动连出去，断线自动重连 |
+| **QQ** | OneBot（反向 / 正向 WS 均可） | 插件侧不需要装任何 QQ 协议库；既能等 NapCat 连过来，也能由插件主动连出去；支持发群 + 私聊给指定 QQ，断线自动重连 |
 
 三个渠道各自独立开关，可只开其中一个，也可以全开。
 
@@ -153,6 +153,7 @@ channels:
     path: "/onebot"
     access-token: ""        # 与 NapCat 侧保持一致，留空则不校验
     group-ids: [1102137231]  # 要发到哪些 QQ 群
+    private-ids: []          # 要私聊给哪些 QQ 号（如管理员），可与群同时发
     timeout-millis: 8000
 ```
 
@@ -177,7 +178,8 @@ channels:
     mode: "client"
     url: "ws://p1.example.com:43295"   # NapCat 那台的对外地址
     access-token: "AQIssue"             # 与 NapCat 侧一致
-    group-ids: [1102137231]
+    group-ids: [1102137231]             # 要发到哪些 QQ 群（可留空）
+    private-ids: [10001, 10002]          # 要私聊给哪些 QQ 号（一般是管理员）
     timeout-millis: 8000
 ```
 
@@ -214,7 +216,7 @@ github:                      # 仓库信息与 Issue 模板
 channels:                    # 三个投递渠道，见上文
   github: { enabled: true, token: "" }          # Fine-grained PAT
   discord: { enabled: false, webhook-url: "", username: "服务器反馈", embed-color: 5793266 }
-  onebot: { enabled: false, mode: "server", bind: "127.0.0.1", port: 6700, path: "/onebot", url: "", access-token: "", group-ids: [] }
+  onebot: { enabled: false, mode: "server", bind: "127.0.0.1", port: 6700, path: "/onebot", url: "", access-token: "", group-ids: [], private-ids: [] }
 
 submit:
   cooldown-seconds: 300      # 同一玩家的冷却，0 表示不限制

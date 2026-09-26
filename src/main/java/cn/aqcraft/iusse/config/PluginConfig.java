@@ -60,6 +60,7 @@ public class PluginConfig {
     private String onebotPath;
     private String onebotAccessToken;
     private List<Long> onebotGroupIds;
+    private List<Long> onebotPrivateIds;
     private long onebotTimeoutMillis;
 
     // 分类
@@ -116,6 +117,10 @@ public class PluginConfig {
         onebotGroupIds = config.getLongList("channels.onebot.group-ids");
         if (onebotGroupIds == null) {
             onebotGroupIds = Collections.emptyList();
+        }
+        onebotPrivateIds = config.getLongList("channels.onebot.private-ids");
+        if (onebotPrivateIds == null) {
+            onebotPrivateIds = Collections.emptyList();
         }
         onebotTimeoutMillis = Math.max(1000L, config.getLong("channels.onebot.timeout-millis", 8000L));
 
@@ -303,6 +308,11 @@ public class PluginConfig {
 
     public List<Long> getOneBotGroupIds() {
         return onebotGroupIds == null ? Collections.<Long>emptyList() : onebotGroupIds;
+    }
+
+    /** 私聊接收者的 QQ 号（一般是管理员）。 */
+    public List<Long> getOneBotPrivateIds() {
+        return onebotPrivateIds == null ? Collections.<Long>emptyList() : onebotPrivateIds;
     }
 
     public long getOneBotTimeoutMillis() {

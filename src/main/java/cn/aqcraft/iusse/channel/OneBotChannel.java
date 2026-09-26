@@ -35,7 +35,8 @@ import cn.aqcraft.iusse.util.Text;
  *       但 NapCat 那台有公网端口映射的场景。NapCat 侧配「WebSocket 服务端」，
  *       插件填 {@code url: "ws://host:port"}。</li>
  * </ul>
- * 两种模式下发消息都是 {@code send_group_msg}。
+ * 两种模式下发消息都是 {@code send_group_msg}；
+ * 另外支持通过 {@code channels.onebot.private-ids} 把反馈同时私聊给指定 QQ（例如管理员）。
  */
 public class OneBotChannel implements Channel {
 
@@ -78,8 +79,8 @@ public class OneBotChannel implements Channel {
         } else if (config.getOneBotPort() <= 0 || config.getOneBotPort() > 65535) {
             reason = "端口不合法";
         }
-        if (reason == null && config.getOneBotGroupIds().isEmpty()) {
-            reason = "未配置 channels.onebot.group-ids（要发到哪个群）";
+        if (reason == null && config.getOneBotGroupIds().isEmpty() && config.getOneBotPrivateIds().isEmpty()) {
+            reason = "未配置 channels.onebot.group-ids / private-ids（要发到哪里）";
         }
         this.disabledReason = reason;
     }
@@ -386,31 +387,46 @@ public class OneBotChannel implements Channel {
     public ChannelResult submit(Submission submission) throws IOException {
         Connection connection = pickConnection();
         if (connection == null) {
-            throw new IOException("当前没有 OneBot 客户端连接（请检查 NapCat 的反向 WS 配置）");
+            throw new IOException(config.isOneBotClientMode()
+                    ? "当前未连接到 OneBot 服务端（" + config.getOneBotUrl() + "）"
+                    : "当前没有 OneBot 客户端连接（请检查 NapCat 的反向 WS 配置）");
         }
 
-        List<Long> groups = config.getOneBotGroupIds();
         String message = buildMessage(submission);
-
-        int sent = 0;
+        int sentGroups = 0;
+        int sentPrivate = 0;
         String lastError = null;
-        for (Long groupId : groups) {
+
+        for (Long groupId : config.getOneBotGroupIds()) {
             Map<String, Object> params = new LinkedHashMap<String, Object>();
             params.put("group_id", groupId);
             params.put("message", message);
 
             Map<String, Object> result = call(connection, "send_group_msg", params, config.getOneBotTimeoutMillis());
             if (isOk(result)) {
-                sent++;
+                sentGroups++;
             } else {
-                lastError = describeFailure(groupId, result);
+                lastError = describeFailure("群 " + groupId, result);
             }
         }
 
-        if (sent == 0) {
+        for (Long userId : config.getOneBotPrivateIds()) {
+            Map<String, Object> params = new LinkedHashMap<String, Object>();
+            params.put("user_id", userId);
+            params.put("message", message);
+
+            Map<String, Object> result = call(connection, "send_private_msg", params, config.getOneBotTimeoutMillis());
+            if (isOk(result)) {
+                sentPrivate++;
+            } else {
+                lastError = describeFailure("QQ " + userId, result);
+            }
+        }
+
+        if (sentGroups == 0 && sentPrivate == 0) {
             throw new IOException(lastError == null ? "OneBot 未返回结果" : lastError);
         }
-        return ChannelResult.success(this, "已发送到 " + sent + " 个 QQ 群");
+        return ChannelResult.success(this, describeSent(sentGroups, sentPrivate));
     }
 
     @Override
@@ -492,16 +508,30 @@ public class OneBotChannel implements Channel {
         return MiniJson.integer(result, "retcode", -1) == 0;
     }
 
-    private static String describeFailure(Long groupId, Map<String, Object> result) {
+    private static String describeSent(int groups, int privateCount) {
+        StringBuilder builder = new StringBuilder();
+        if (groups > 0) {
+            builder.append(groups).append(" 个群");
+        }
+        if (privateCount > 0) {
+            if (builder.length() > 0) {
+                builder.append('、');
+            }
+            builder.append(privateCount).append(" 个私聊");
+        }
+        return "已发送到 " + builder;
+    }
+
+    private static String describeFailure(String target, Map<String, Object> result) {
         if (result == null) {
-            return "群 " + groupId + "：OneBot 未在超时时间内响应";
+            return target + "：OneBot 未在超时时间内响应";
         }
         String wording = MiniJson.string(result, "wording");
         if (wording == null) {
             wording = MiniJson.string(result, "message");
         }
         int retcode = MiniJson.integer(result, "retcode", -1);
-        return "群 " + groupId + " 发送失败（retcode " + retcode + "）"
+        return target + " 发送失败（retcode " + retcode + "）"
                 + (wording == null ? "" : "：" + wording);
     }
 
