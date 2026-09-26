@@ -476,8 +476,7 @@ public class OneBotChannel implements Channel {
     }
 
     /** 发一条纯文本消息，失败不抛异常（通知类消息不重试）。 */
-    private boolean sendTo(Connection connection, String action, String idField, long id, String message) {
-        Map<String, Object> params = new LinkedHashMap<String, Object>();
+    private boolean sendTo(Connection connection, String action, String idField, long id, String message) {        Map<String, Object> params = new LinkedHashMap<String, Object>();
         params.put(idField, id);
         params.put("message", message);
         try {

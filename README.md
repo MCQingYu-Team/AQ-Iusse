@@ -60,7 +60,7 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 | 单 jar 跨版本 | 一份产物覆盖 Paper 1.21.7 至最新版（含 26.x） |
 | 玩家零门槛 | 玩家不需要任何账号，服务器统一持有一个凭据 |
 | 来源可追溯 | 各渠道的消息都会带上玩家名、UUID、分类、服务端版本与提交时间 |
-| 反馈闭环 | Issue 被关闭或有人评论时通知提交者；长时间未处理会自动提醒管理员 |
+| 反馈闭环 | Issue 被关闭或有人评论时通知提交者：在线发游戏内消息，离线经 EasyBot 查 QQ 私信；长时间未处理会自动提醒管理员 |
 | 单语言文件 | 所有面向玩家的文案都在 `lang.yml`，改文案不用碰代码和 `config.yml` |
 | 零第三方依赖 | HTTP 用 `HttpURLConnection`、JSON 自写、WebSocket 服务端自写，无任何外部依赖 |
 
@@ -206,7 +206,11 @@ channels:
          https://github.com/MCQingYu-Team/QY-SERVER-IUSSE/issues/12
 ```
 
-玩家不在线时通知会排队，等他上线自动补发（关掉 `tracking.queue-offline` 则直接丢弃）。
+玩家不在线时，插件会按这个顺序尝试：
+
+1. **QQ 私信** —— 如果服务器装了 [EasyBot](https://docs.inectar.cn/docs/easybot/)，通过它的 Bridge 接口查到
+   该玩家绑定的 QQ 号，用 OneBot 直接把通知私信给他（关掉 `tracking.notify-qq-offline` 可跳过）
+2. **排队等他上线** —— 上线后 3 秒自动补发（关掉 `tracking.queue-offline` 则直接丢弃）
 
 **处理后群内播报** —— Issue 被关闭时，除了通知提交者，还会往渠道（QQ 群 / Discord）发一条：
 
@@ -238,7 +242,8 @@ tracking:
   notify-on-close: true
   notify-on-comment: true
   announce-on-close: true  # 处理完成后在渠道里播报一条
-  queue-offline: true
+  queue-offline: true      # 玩家离线时排队，上线补发
+  notify-qq-offline: true  # 玩家离线时经 EasyBot 查 QQ 并私信通知
   sla:
     enabled: true
     hours: 48               # 超过 48 小时算超时
@@ -359,6 +364,7 @@ src/main/java/cn/aqcraft/iusse/
 ├─ tracking/
 │   ├─ IssueRecord.java            单条跟踪记录
 │   └─ IssueTracker.java           Issue 状态轮询、回传玩家、超时提醒
+├─ integration/EasyBotBridge.java  反射查询玩家绑定的 QQ（无编译期依赖）
 ├─ session/CooldownManager.java    提交冷却
 ├─ listener/PlayerJoinListener.java 上线补发离线通知
 └─ util/Text.java                  颜色代码处理

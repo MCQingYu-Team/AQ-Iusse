@@ -69,6 +69,7 @@ public class PluginConfig {
     private int trackingMaxPerRun;
     private int trackingKeepDays;
     private boolean trackingQueueOffline;
+    private boolean notifyQqOffline;
     private boolean notifyOnClose;
     private boolean notifyOnComment;
     private boolean announceOnClose;
@@ -145,6 +146,7 @@ public class PluginConfig {
         trackingMaxPerRun = Math.max(1, config.getInt("tracking.max-per-run", 10));
         trackingKeepDays = Math.max(1, config.getInt("tracking.keep-days", 30));
         trackingQueueOffline = config.getBoolean("tracking.queue-offline", true);
+        notifyQqOffline = config.getBoolean("tracking.notify-qq-offline", true);
         notifyOnClose = config.getBoolean("tracking.notify-on-close", true);
         notifyOnComment = config.getBoolean("tracking.notify-on-comment", true);
         announceOnClose = config.getBoolean("tracking.announce-on-close", true);
@@ -305,6 +307,11 @@ public class PluginConfig {
     /** 玩家离线时是否把通知排队、等他上线补发。 */
     public boolean isTrackingQueueOffline() {
         return trackingQueueOffline;
+    }
+
+    /** 玩家离线时，是否经 EasyBot 查其绑定的 QQ 并私信通知。 */
+    public boolean isNotifyQqOffline() {
+        return notifyQqOffline;
     }
 
     public boolean isNotifyOnClose() {

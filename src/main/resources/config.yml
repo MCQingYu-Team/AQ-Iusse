@@ -114,6 +114,8 @@ tracking:
   announce-on-close: true
   # 玩家离线时把通知存起来，等他上线补发（false 则直接丢弃）
   queue-offline: true
+  # 玩家离线时，经 EasyBot 查询其绑定的 QQ 并私信通知（需要服务器装了 EasyBot）
+  notify-qq-offline: true
 
   # 处理超时提醒（SLA）
   sla:

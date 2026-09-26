@@ -6,6 +6,9 @@ authors: [MCQingYu-Team]
 description: 在游戏内通过 Paper 对话框把反馈投递到 GitHub / Discord / QQ 群
 website: https://github.com/MCQingYu-Team/AQ-Iusse
 
+# 装了 EasyBot 时，可在玩家离线时查询其绑定的 QQ 并私信通知（不装也能正常用）
+softdepend: [EasyBot]
+
 commands:
   iusse:
     description: 打开反馈对话框，或直接提交一条反馈

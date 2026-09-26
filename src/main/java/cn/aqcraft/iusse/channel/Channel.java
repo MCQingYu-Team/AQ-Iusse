@@ -63,4 +63,15 @@ public interface Channel {
     default boolean notifyAdmins(String message, boolean groups, boolean privates) {
         return notifyAdmins(message);
     }
+
+    /**
+     * 向指定的社交账号私信一条消息。
+     * <p>
+     * 目前只有 OneBot 支持（账号即 QQ 号），用于在玩家不在线时把反馈进展推给他。
+     *
+     * @return 是否送达
+     */
+    default boolean sendPrivate(long accountId, String message) {
+        return false;
+    }
 }

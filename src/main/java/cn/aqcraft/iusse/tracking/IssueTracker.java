@@ -20,6 +20,7 @@ import cn.aqcraft.iusse.AqIssuePlugin;
 import cn.aqcraft.iusse.channel.Channel;
 import cn.aqcraft.iusse.config.PluginConfig;
 import cn.aqcraft.iusse.github.MiniJson;
+import cn.aqcraft.iusse.integration.EasyBotBridge;
 import cn.aqcraft.iusse.net.Http;
 import cn.aqcraft.iusse.util.Text;
 
@@ -363,32 +364,71 @@ public class IssueTracker {
     // 通知玩家
     // ------------------------------------------------------------------
 
+    /**
+     * 把状态变化推给提交者。
+     * <p>
+     * 顺序：玩家在线 → 游戏内消息；不在线 → 先试 QQ 私信（经 EasyBot 查绑定）；
+     * 都不可用 → 排队等他上线补发。
+     * <p>
+     * 本方法在轮询的异步线程上执行。
+     */
     private void notifyPlayer(IssueRecord record, String message) {
-        final UUID uuid = parseUuid(record.playerUuid);
-        if (uuid == null || message == null || message.isEmpty()) {
+        if (message == null || message.isEmpty()) {
             return;
         }
-        final boolean queueOffline = plugin.getPluginConfig().isTrackingQueueOffline();
+        UUID uuid = parseUuid(record.playerUuid);
 
-        // 轮询跑在异步线程，发送消息切回主线程
+        Player online = uuid == null ? null : Bukkit.getPlayer(uuid);
+        if (online != null && online.isOnline()) {
+            sendToPlayer(online, message);
+            return;
+        }
+
+        if (plugin.getPluginConfig().isNotifyQqOffline() && sendByQq(record, message)) {
+            return;
+        }
+
+        if (uuid != null && plugin.getPluginConfig().isTrackingQueueOffline()) {
+            List<String> queue = pending.get(uuid);
+            if (queue == null) {
+                queue = new CopyOnWriteArrayList<String>();
+                pending.put(uuid, queue);
+            }
+            queue.add(message);
+        }
+    }
+
+    private void sendToPlayer(final Player player, final String message) {
         Bukkit.getScheduler().runTask(plugin, new Runnable() {
             @Override
             public void run() {
-                Player player = Bukkit.getPlayer(uuid);
-                if (player != null && player.isOnline()) {
+                if (player.isOnline()) {
                     player.sendMessage(message);
-                    return;
-                }
-                if (queueOffline) {
-                    List<String> queue = pending.get(uuid);
-                    if (queue == null) {
-                        queue = new CopyOnWriteArrayList<String>();
-                        pending.put(uuid, queue);
-                    }
-                    queue.add(message);
                 }
             }
         });
+    }
+
+    /** 经 EasyBot 查到玩家绑定的 QQ，再让 OneBot 私信他。 */
+    private boolean sendByQq(IssueRecord record, String message) {
+        if (!EasyBotBridge.isAvailable()) {
+            return false;
+        }
+        long qq = EasyBotBridge.queryQq(record.playerName);
+        if (qq <= 0) {
+            return false;
+        }
+        for (Channel channel : plugin.getChannelManager().getChannels()) {
+            try {
+                if (channel.sendPrivate(qq, message)) {
+                    plugin.getLogger().info("已通过 QQ 私信通知 " + record.playerName + "（" + qq + "）");
+                    return true;
+                }
+            } catch (Throwable throwable) {
+                plugin.getLogger().fine("QQ 私信发送失败：" + throwable.getMessage());
+            }
+        }
+        return false;
     }
 
     private static UUID parseUuid(String raw) {
