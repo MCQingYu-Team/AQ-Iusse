@@ -87,8 +87,13 @@ public class AqIssuePlugin extends JavaPlugin {
         if (pluginConfig.isRepoConfigured()) {
             getLogger().info("GitHub 仓库：" + pluginConfig.getRepoUrl());
         }
-        if (!pluginConfig.hasToken() && pluginConfig.isGitHubEnabled() && !pluginConfig.isGitHubUsingApp()) {
-            getLogger().warning("GitHub 通道既没有配置 App，也没有应急 PAT，该通道会投递失败。");
+        if (pluginConfig.isUsingLegacyCredential()) {
+            getLogger().warning("检测到旧版配置：GitHub App 未填写完整，已自动退回 PAT 模式。");
+            getLogger().warning("建议按 README 配置 GitHub App（channels.github.app-id / installation-id / private-key-file），"
+                    + "App 的 token 会自动轮换、不会过期。");
+        }
+        if (pluginConfig.isGitHubEnabled() && !pluginConfig.isGitHubUsingApp() && !pluginConfig.hasToken()) {
+            getLogger().warning("GitHub 通道既没有配置 App，也没有 PAT，该通道会投递失败。");
         }
         if (!pluginConfig.isGitHubEnabled() && !pluginConfig.isDiscordEnabled() && !pluginConfig.isOneBotEnabled()) {
             getLogger().warning("未启用任何投递渠道，请在 config.yml 的 channels 段中至少开启一个。");

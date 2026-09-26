@@ -182,7 +182,7 @@ language-file: "lang.yml"
 github:                      # 仓库信息与 Issue 模板
   api-base: "https://api.github.com"
   owner: "MCQingYu-Team"
-  repo: "AQ-Iusse"
+  repo: "AQ-Iusse"           # 可以指向任意仓库，例如专门用来收反馈的 QY-SERVER-IUSSE
   labels: ["游戏内反馈"]       # 所有 Issue 都会带上的标签
   title-prefix: "[游戏内] "
   include-player-info: true
