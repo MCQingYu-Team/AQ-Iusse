@@ -137,6 +137,8 @@ tracking:
 submit:
   # 同一玩家的提交冷却时间（秒），0 表示不限制
   cooldown-seconds: 300
+  # 拥有该权限的玩家不受提交限制（冷却 + 长度校验），留空表示不启用
+  bypass-permission: "aqissue.admin"
   # 标题长度限制（对话框直接限制输入长度）
   min-title-length: 4
   max-title-length: 60

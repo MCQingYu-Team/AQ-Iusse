@@ -171,14 +171,23 @@ public class AqIssuePlugin extends JavaPlugin {
             return false;
         }
 
+        boolean bypass = isBypassing(player);
+
         String cleanTitle = Text.oneLine(Text.plain(title));
-        if (cleanTitle.length() < pluginConfig.getMinTitleLength()) {
+        // 标题与内容不能为空这条对所有人一视同仁，其余限制管理员可豁免
+        if (cleanTitle.isEmpty()) {
             send(player, "submit.title-too-short", "min", pluginConfig.getMinTitleLength());
             return false;
         }
-        if (cleanTitle.length() > pluginConfig.getMaxTitleLength()) {
-            send(player, "submit.title-too-long", "max", pluginConfig.getMaxTitleLength());
-            return false;
+        if (!bypass) {
+            if (cleanTitle.length() < pluginConfig.getMinTitleLength()) {
+                send(player, "submit.title-too-short", "min", pluginConfig.getMinTitleLength());
+                return false;
+            }
+            if (cleanTitle.length() > pluginConfig.getMaxTitleLength()) {
+                send(player, "submit.title-too-long", "max", pluginConfig.getMaxTitleLength());
+                return false;
+            }
         }
 
         String cleanBody = body == null ? "" : body.trim();
@@ -186,7 +195,7 @@ public class AqIssuePlugin extends JavaPlugin {
             send(player, "submit.body-empty");
             return false;
         }
-        if (cleanBody.length() > pluginConfig.getMaxBodyLength()) {
+        if (!bypass && cleanBody.length() > pluginConfig.getMaxBodyLength()) {
             send(player, "submit.body-too-long", "max", pluginConfig.getMaxBodyLength());
             return false;
         }
@@ -196,11 +205,24 @@ public class AqIssuePlugin extends JavaPlugin {
     }
 
     /**
+     * 该玩家是否豁免提交限制（冷却、长度校验）。
+     * <p>
+     * 默认给 {@code aqissue.admin}（也就是 OP）开绿灯，管理员测试、代提反馈时不用等冷却。
+     */
+    public boolean isBypassing(Player player) {
+        String permission = pluginConfig.getBypassPermission();
+        return !permission.isEmpty() && player.hasPermission(permission);
+    }
+
+    /**
      * 校验冷却时间。
      *
      * @return true 表示可以提交
      */
     public boolean checkCooldown(Player player) {
+        if (isBypassing(player)) {
+            return true;
+        }
         long remaining = cooldownManager.remaining(player.getUniqueId(), pluginConfig.getCooldownSeconds());
         if (remaining > 0) {
             send(player, "submit.cooldown", "seconds", remaining);

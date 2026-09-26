@@ -284,6 +284,7 @@ channels:                    # 三个投递渠道，见上文
 
 submit:
   cooldown-seconds: 300      # 同一玩家的冷却，0 表示不限制
+  bypass-permission: "aqissue.admin"  # 拥有该权限则豁免冷却与长度校验
   min-title-length: 4
   max-title-length: 60
   max-body-length: 800
@@ -316,6 +317,11 @@ categories:                  # 对话框里的「反馈分类」下拉项
 | `/iusse help` | 显示帮助 | `aqissue.use` |
 
 别名：`/gitissue`、`/aqissue`。
+
+> [!TIP]
+> 拥有 `aqissue.admin`（默认 OP 都有）的玩家**不受提交限制** —— 冷却直接跳过，标题与正文的长度校验也放行，
+> 方便管理员测试或代提反馈。改 `submit.bypass-permission` 可以换成别的权限节点，留空则所有人一视同仁。
+> 注意「标题 / 内容不能为空」这条对所有人都生效，不会豁免。
 
 `/iusse status` 输出示例：
 

@@ -38,6 +38,7 @@ public class PluginConfig {
 
     // 提交限制
     private int cooldownSeconds;
+    private String bypassPermission;
     private int minTitleLength;
     private int maxTitleLength;
     private int maxBodyLength;
@@ -108,6 +109,7 @@ public class PluginConfig {
         proxyPort = config.getInt("github.proxy.port", 7890);
 
         cooldownSeconds = Math.max(0, config.getInt("submit.cooldown-seconds", 300));
+        bypassPermission = config.getString("submit.bypass-permission", "aqissue.admin").trim();
         minTitleLength = Math.max(1, config.getInt("submit.min-title-length", 4));
         maxTitleLength = Math.max(minTitleLength, config.getInt("submit.max-title-length", 60));
         maxBodyLength = Math.max(16, config.getInt("submit.max-body-length", 800));
@@ -263,6 +265,15 @@ public class PluginConfig {
 
     public int getCooldownSeconds() {
         return cooldownSeconds;
+    }
+
+    /**
+     * 不受提交限制（冷却与长度校验）的权限节点。
+     *
+     * @return 权限字符串；留空表示所有人一视同仁
+     */
+    public String getBypassPermission() {
+        return bypassPermission == null ? "" : bypassPermission;
     }
 
     public int getMinTitleLength() {
