@@ -480,9 +480,15 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
     }
 
     private void collectIntegrationChecks(List<String[]> rows) {
-        rows.add(EasyBotBridge.isAvailable()
-                ? new String[]{"ok", "EasyBot", "已加载，可用 /iusse qq <玩家> 查询绑定的 QQ"}
-                : new String[]{"warn", "EasyBot", "未安装或未加载，离线 QQ 私信不可用"});
+        if (EasyBotBridge.isAvailable() && EasyBotBridge.isReady()) {
+            rows.add(new String[]{"ok", "EasyBot", "已就绪，可用 /iusse qq <玩家> 查询绑定的 QQ"});
+        } else if (EasyBotBridge.isAvailable()) {
+            rows.add(new String[]{"warn", "EasyBot",
+                    "插件已加载，但还没连上 EasyBot 主程序 —— 查绑定会失败"});
+        } else {
+            rows.add(new String[]{"fail", "EasyBot", EasyBotBridge.describePluginPresence()
+                    + "；" + EasyBotBridge.getFailureReason()});
+        }
         rows.add(new String[]{"ok", "反馈跟踪", "已记录 " + plugin.getIssueTracker().size()
                 + " 条｜待重发 " + plugin.getFeedbackQueue().size() + " 条"});
     }
@@ -521,8 +527,10 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
             @Override
             public void run() {
-                boolean available = EasyBotBridge.isAvailable();
-                long qq = available ? EasyBotBridge.queryQq(target) : 0L;
+                final boolean easybot = EasyBotBridge.isAvailable();
+                final boolean ready = easybot && EasyBotBridge.isReady();
+                final String easybotDetail = EasyBotBridge.getFailureReason();
+                long qq = ready ? EasyBotBridge.queryQq(target) : 0L;
 
                 boolean sent = false;
                 String sendError = null;
@@ -539,7 +547,6 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                     }
                 }
 
-                final boolean easybot = available;
                 final long account = qq;
                 final boolean delivered = sent;
                 final String failure = sendError;
@@ -552,7 +559,11 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                             return;
                         }
                         if (!easybot) {
-                            plugin.send(player, "qq.easybot-missing");
+                            plugin.send(player, "qq.easybot-missing", "detail", easybotDetail);
+                            return;
+                        }
+                        if (!ready) {
+                            plugin.send(player, "qq.easybot-not-ready");
                             return;
                         }
                         if (account <= 0) {

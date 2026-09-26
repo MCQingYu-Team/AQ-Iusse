@@ -125,6 +125,9 @@ public class AqIssuePlugin extends JavaPlugin {
         if (!pluginConfig.isGitHubEnabled() && !pluginConfig.isDiscordEnabled() && !pluginConfig.isOneBotEnabled()) {
             getLogger().warning("未启用任何投递渠道，请在 config.yml 的 channels 段中至少开启一个。");
         }
+        // EasyBot 是可选的：不可用时只影响「玩家离线时用 QQ 私信通知」，其余功能不受影响，
+        // 但把原因写进日志，免得排查时只能看到一句「未安装」
+        getLogger().info("EasyBot 联动：" + cn.aqcraft.iusse.integration.EasyBotBridge.describeState());
     }
 
     /** 重新读取配置与语言文件（/iusse reload）。 */

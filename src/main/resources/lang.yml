@@ -168,7 +168,8 @@ test:
 # ------------------------------------------------------------
 qq:
   checking: "&7正在查询 &f{player} &7绑定的 QQ……"
-  easybot-missing: "&c服务器未安装或未加载 EasyBot，无法查询 QQ 绑定。"
+  easybot-missing: "&cEasyBot 不可用：&f{detail}"
+  easybot-not-ready: "&eEasyBot 已加载，但还没连上主程序，暂时查不到绑定。请确认 EasyBot 已在群聊里上线。"
   unbound: "&e玩家 &f{player} &e没有绑定 QQ。"
   bound: "&a玩家 &f{player} &a绑定的 QQ：&f{qq}"
   sent: "&a测试私信已发送到 &f{qq}&a，去 QQ 上看看收到没有。"
