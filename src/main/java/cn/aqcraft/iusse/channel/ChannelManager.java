@@ -11,6 +11,7 @@ import org.bukkit.Bukkit;
 
 import cn.aqcraft.iusse.AqIssuePlugin;
 import cn.aqcraft.iusse.config.PluginConfig;
+import cn.aqcraft.iusse.integration.EasyBotBridge;
 import cn.aqcraft.iusse.net.Http;
 
 /**
@@ -120,6 +121,7 @@ public class ChannelManager {
     }
 
     private List<ChannelResult> deliver(List<Channel> targets, Submission submission) {
+        resolvePlayerQq(submission);
         List<ChannelResult> results = new ArrayList<ChannelResult>(targets.size());
         for (Channel channel : targets) {
             ChannelResult result;
@@ -137,6 +139,31 @@ public class ChannelManager {
             results.add(result);
         }
         return results;
+    }
+
+    /**
+     * 查提交者绑定的 QQ，回填到 {@link Submission} 上，所有渠道共用。
+     * <p>
+     * 放在渠道循环之前而不是各渠道自己查，有两个原因：
+     * <ul>
+     *   <li>渠道是按顺序投递的，GitHub 排在最前 —— 等 QQ 群那个渠道查到时，
+     *       Issue 早就建好了，信息表上根本带不上 QQ</li>
+     *   <li>一个渠道查一次的话，EasyBot 的 5 秒超时风险会乘上渠道数</li>
+     * </ul>
+     * 本方法在异步线程上被调用（EasyBot 查询本身是阻塞的）。
+     */
+    private void resolvePlayerQq(Submission submission) {
+        if (submission.getPlayerQq() > 0 || !plugin.getPluginConfig().isShowPlayerQq()) {
+            return;
+        }
+        String playerName = submission.getPlayerName();
+        if (playerName == null || playerName.isEmpty()) {
+            return;
+        }
+        long qq = EasyBotBridge.queryQq(playerName);
+        if (qq > 0) {
+            submission.setPlayerQq(qq);
+        }
     }
 
     private static String describe(Throwable throwable) {

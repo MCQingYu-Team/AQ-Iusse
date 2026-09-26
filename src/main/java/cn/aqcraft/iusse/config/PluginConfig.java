@@ -53,6 +53,8 @@ public class PluginConfig {
     private double duplicateThreshold;
     /** 自动给正文里的 IP / QQ 等打码。 */
     private boolean maskSensitive;
+    /** 打码时是否连 QQ 号一起处理（默认否 —— 插件本身就会显示提交者的 QQ）。 */
+    private boolean maskQq;
     /** 全部渠道失败时是否存盘等待重发。 */
     private boolean retryQueueEnabled;
     private int retryIntervalMinutes;
@@ -79,10 +81,10 @@ public class PluginConfig {
     private List<Long> onebotGroupIds;
     private List<Long> onebotPrivateIds;
     private long onebotTimeoutMillis;
-    /** 群里发反馈时 @ 提交者（需 EasyBot 能查到他的 QQ）。 */
-    private boolean onebotMentionPlayer;
-    /** 群里发反馈时顺带显示提交者的 QQ 号。 */
-    private boolean onebotShowPlayerQq;
+    /** 在所有渠道显示提交者绑定的 QQ。 */
+    private boolean showPlayerQq;
+    /** QQ 群消息里额外 @ 提交者。 */
+    private boolean mentionPlayerInGroup;
 
     // 反馈跟踪（Issue 状态回传 + SLA 提醒）
     private boolean trackingEnabled;
@@ -145,6 +147,7 @@ public class PluginConfig {
         duplicateCheck = config.getBoolean("submit.duplicate-check", true);
         duplicateThreshold = clamp(config.getDouble("submit.duplicate-threshold", 0.6), 0.1D, 1.0D);
         maskSensitive = config.getBoolean("submit.mask-sensitive", true);
+        maskQq = config.getBoolean("submit.mask-qq", false);
         retryQueueEnabled = config.getBoolean("submit.retry-queue", true);
         retryIntervalMinutes = Math.max(1, config.getInt("submit.retry-interval-minutes", 10));
         retryMaxAttempts = Math.max(1, config.getInt("submit.retry-max-attempts", 5));
@@ -178,8 +181,8 @@ public class PluginConfig {
             onebotPrivateIds = Collections.emptyList();
         }
         onebotTimeoutMillis = Math.max(1000L, config.getLong("channels.onebot.timeout-millis", 8000L));
-        onebotMentionPlayer = config.getBoolean("channels.onebot.mention-player", true);
-        onebotShowPlayerQq = config.getBoolean("channels.onebot.show-player-qq", true);
+        showPlayerQq = config.getBoolean("player-qq.show", true);
+        mentionPlayerInGroup = config.getBoolean("player-qq.mention-in-group", true);
 
         trackingEnabled = config.getBoolean("tracking.enabled", true);
         trackingIntervalMinutes = Math.max(1, config.getInt("tracking.interval-minutes", 10));
@@ -357,9 +360,14 @@ public class PluginConfig {
         return duplicateThreshold;
     }
 
-    /** 是否自动给正文里的 IP / QQ 等隐私信息打码。 */
+    /** 是否自动给正文里的 IP / 手机号 / 邮箱打码。 */
     public boolean isMaskSensitive() {
         return maskSensitive;
+    }
+
+    /** 打码时是否连 QQ 号一起处理（默认否）。 */
+    public boolean isMaskQq() {
+        return maskQq;
     }
 
     /** 全部渠道投递失败时，是否存盘等待重发。 */
@@ -553,14 +561,14 @@ public class PluginConfig {
         return onebotTimeoutMillis;
     }
 
-    /** 群里发反馈时是否 @ 提交者（需 EasyBot 能查到他的 QQ；查不到就不 @）。 */
-    public boolean isOneBotMentionPlayer() {
-        return onebotMentionPlayer;
+    /** 是否在所有渠道显示提交者绑定的 QQ（需 EasyBot 能查到；查不到就不显示）。 */
+    public boolean isShowPlayerQq() {
+        return showPlayerQq;
     }
 
-    /** 群里发反馈时是否顺带把提交者的 QQ 号写在消息里。 */
-    public boolean isOneBotShowPlayerQq() {
-        return onebotShowPlayerQq;
+    /** QQ 群消息里是否额外 @ 提交者。 */
+    public boolean isMentionPlayerInGroup() {
+        return mentionPlayerInGroup;
     }
 
     /** 按配置构造代理对象，未启用时返回 {@code null}。 */

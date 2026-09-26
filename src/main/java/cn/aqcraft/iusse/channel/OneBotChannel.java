@@ -20,7 +20,6 @@ import java.util.logging.Level;
 import cn.aqcraft.iusse.AqIssuePlugin;
 import cn.aqcraft.iusse.config.PluginConfig;
 import cn.aqcraft.iusse.github.MiniJson;
-import cn.aqcraft.iusse.integration.EasyBotBridge;
 import cn.aqcraft.iusse.net.WebSocketConnection;
 import cn.aqcraft.iusse.util.Text;
 
@@ -392,12 +391,11 @@ public class OneBotChannel implements Channel {
                     : "当前没有 OneBot 客户端连接（请检查 NapCat 的反向 WS 配置）");
         }
 
-        // 群里要 @ 提交者的话，得先经 EasyBot 查他绑定的 QQ。
-        // 这一步会阻塞（EasyBot 内部 5 秒超时），但 submit 本来就在异步线程上跑。
-        long playerQq = resolvePlayerQq(submission);
-        String groupMessage = buildMessage(submission, mention(playerQq), playerQq,
-                config.isOneBotShowPlayerQq());
-        String privateMessage = buildMessage(submission, "", 0L, false);
+        // QQ 由 ChannelManager 在投递前统一查好 —— GitHub 排在前面，
+        // 必须先把值拿到，Issue 的信息表里才带得上
+        long playerQq = submission.getPlayerQq();
+        String groupMessage = buildMessage(submission, mention(playerQq));
+        String privateMessage = buildMessage(submission, "");
 
         int sentGroups = 0;
         int sentPrivate = 0;
@@ -435,31 +433,9 @@ public class OneBotChannel implements Channel {
         return ChannelResult.success(this, describeSent(sentGroups, sentPrivate) + mentionNote(playerQq));
     }
 
-    /**
-     * 查提交者绑定的 QQ，用于群里 @ 他。
-     * <p>
-     * 只在「确实要发群消息」且配置要求 @ 或显示 QQ 时才查 —— 查一次要等 EasyBot 回调，
-     * 没必要时不该拖慢投递。
-     *
-     * @return QQ 号；不需要、未绑定或查询失败时返回 0
-     */
-    private long resolvePlayerQq(Submission submission) {
-        if (!config.isOneBotMentionPlayer() && !config.isOneBotShowPlayerQq()) {
-            return 0L;
-        }
-        if (config.getOneBotGroupIds().isEmpty()) {
-            return 0L;
-        }
-        String playerName = submission.getPlayerName();
-        if (playerName == null || playerName.isEmpty()) {
-            return 0L;
-        }
-        return EasyBotBridge.queryQq(playerName);
-    }
-
     /** OneBot 通用的 @ 前缀；不需要 @ 时返回空串。 */
     private String mention(long playerQq) {
-        if (playerQq <= 0 || !config.isOneBotMentionPlayer()) {
+        if (playerQq <= 0 || !config.isMentionPlayerInGroup()) {
             return "";
         }
         // CQ 码是 OneBot v11 的通用写法，NapCat / Lagrange / go-cqhttp 都认
@@ -468,7 +444,7 @@ public class OneBotChannel implements Channel {
 
     /** 回执里补一句「已 @ 谁」，方便管理员确认。 */
     private String mentionNote(long playerQq) {
-        return playerQq > 0 && config.isOneBotMentionPlayer() ? "（已 @ " + playerQq + "）" : "";
+        return playerQq > 0 && config.isMentionPlayerInGroup() ? "（已 @ " + playerQq + "）" : "";
     }
 
     @Override
@@ -544,24 +520,17 @@ public class OneBotChannel implements Channel {
      * <p>
      * 正文超长时只截断正文，末尾的链接一定要保住 —— 否则玩家看不到 Issue 地址。
      * {@code mention} 放在最前面，所以截断也不会把它切掉。
+     * 提交者的 QQ 由 {@link Submission#toPlainText()} 统一带上（Discord 也走同一条路）。
      *
-     * @param mention  群消息的 @ 前缀，没有则为空串
-     * @param playerQq 提交者绑定的 QQ，0 表示未知
-     * @param showQq   是否在正文里显示这个 QQ 号
+     * @param mention 群消息的 @ 前缀，没有则为空串
      */
-    private String buildMessage(Submission submission, String mention, long playerQq, boolean showQq) {
+    private String buildMessage(Submission submission, String mention) {
         StringBuilder suffix = new StringBuilder();
         for (String link : submission.getLinks()) {
             suffix.append('\n').append(link);
         }
 
-        StringBuilder header = new StringBuilder();
-        header.append("【").append(submission.getCategoryName()).append("】")
-                .append(submission.getTitle()).append('\n');
-        if (showQq && playerQq > 0) {
-            header.append("提交者 QQ：").append(playerQq).append('\n');
-        }
-
+        String header = "【" + submission.getCategoryName() + "】" + submission.getTitle() + "\n";
         String content = mention + header + submission.toPlainText(false);
 
         int budget = MAX_MESSAGE_LENGTH - suffix.length();

@@ -16,6 +16,13 @@ public class Submission {
 
     private final String playerName;
     private final String playerUuid;
+    /**
+     * 提交者绑定的 QQ，0 表示未知。
+     * <p>
+     * 可变是因为它不随提交一起产生：要在投递前经 EasyBot 查一次，
+     * 查到了再回填给所有渠道（GitHub 先投递，必须先把值拿到）。
+     */
+    private long playerQq;
     private final String categoryId;
     private final String categoryName;
     private final List<String> labels;
@@ -52,6 +59,18 @@ public class Submission {
 
     public String getPlayerUuid() {
         return playerUuid;
+    }
+
+    /** 提交者绑定的 QQ，0 表示未知（没绑定 / EasyBot 不可用 / 配置关掉了）。 */
+    public long getPlayerQq() {
+        return playerQq;
+    }
+
+    /** 回填提交者绑定的 QQ；只接受正数，0 与负数会被忽略。 */
+    public void setPlayerQq(long playerQq) {
+        if (playerQq > 0) {
+            this.playerQq = playerQq;
+        }
     }
 
     public String getCategoryId() {
@@ -147,6 +166,9 @@ public class Submission {
         if (playerName != null && !playerName.isEmpty()) {
             builder.append("| 提交玩家 | **").append(cell(playerName)).append("** |\n");
         }
+        if (playerQq > 0) {
+            builder.append("| 玩家 QQ | `").append(playerQq).append("` |\n");
+        }
         builder.append("| 反馈分类 | ").append(cell(categoryName))
                 .append(" `").append(cell(categoryId)).append("` |\n");
         builder.append("| 提交时间 | ").append(getFormattedTime()).append(" |\n\n");
@@ -206,6 +228,9 @@ public class Submission {
         StringBuilder builder = new StringBuilder();
         if (playerName != null) {
             builder.append("玩家：").append(playerName).append('\n');
+        }
+        if (playerQq > 0) {
+            builder.append("QQ：").append(playerQq).append('\n');
         }
         builder.append("分类：").append(categoryName).append('\n');
         if (serverInfo != null && !serverInfo.isEmpty()) {

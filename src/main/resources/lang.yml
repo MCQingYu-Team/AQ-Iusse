@@ -83,7 +83,7 @@ submit:
   body-empty: "&c内容不能为空。"
   checking-duplicate: "&7正在检查是否已经有相似的反馈……"
   duplicate-found: "&e发现可能重复的反馈：&f#{number} &7{title}"
-  mask-notice: "&7（检测到疑似 IP / QQ 等隐私信息，已自动打码）"
+  mask-notice: "&7（检测到疑似 IP / 手机号 / 邮箱，已自动打码）"
   queue-failed: "&e已存入重发队列，稍后会自动重试，成功后另行通知你。"
   body-too-long: "&c内容太长了，最多 {max} 个字。"
   cancelled: "&7已取消本次提交。"

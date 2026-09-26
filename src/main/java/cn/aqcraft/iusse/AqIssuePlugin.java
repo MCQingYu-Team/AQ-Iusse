@@ -229,9 +229,11 @@ public class AqIssuePlugin extends JavaPlugin {
         }
 
         // 打码放在长度校验之后：限制按玩家实际输入算，投递的才是处理过的文本
+        // QQ 默认不打码 —— 插件本身就会把提交者的 QQ 显示在所有渠道里
         boolean maskable = pluginConfig.isMaskSensitive() && category.isMaskSensitive();
-        Sanitizer.Result safeTitle = Sanitizer.mask(cleanTitle, maskable);
-        Sanitizer.Result safeBody = Sanitizer.mask(cleanBody, maskable);
+        boolean maskQq = maskable && pluginConfig.isMaskQq();
+        Sanitizer.Result safeTitle = Sanitizer.mask(cleanTitle, maskable, maskQq);
+        Sanitizer.Result safeBody = Sanitizer.mask(cleanBody, maskable, maskQq);
         if (safeTitle.isMasked() || safeBody.isMasked()) {
             send(player, "submit.mask-notice");
         }

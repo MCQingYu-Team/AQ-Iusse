@@ -37,8 +37,8 @@ QQ 群里收到的消息（自动 @ 提交者，并带上刚创建的 Issue 地�
 
 ```
 @xcbro 【Bug 反馈】服务器卡顿
-提交者 QQ：164907681
 玩家：xcbro
+QQ：164907681
 分类：Bug 反馈
 服务端：Paper 26.2 (git-Paper-xxx)
 时间：2026-09-26 22:15:03
@@ -49,8 +49,8 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 ```
 
 @ 需要 EasyBot 能查到该玩家绑定的 QQ（见下文「EasyBot 联动」）。
-查不到就不 @、也不显示 QQ 行，其余内容照常。
-私信给管理员的副本不带 @ 与 QQ 行 —— 那是给管理员看的，没必要。
+绑定的 QQ 会出现在**所有渠道**里：GitHub Issue 的信息表、Discord 的嵌入正文、QQ 群消息。
+只查一次（在投递前），不会每个渠道各查一遍。查不到就不显示，其余内容照常。
 
 > [!NOTE]
 > 渠道是按 `GitHub → Discord → QQ` 的顺序投递的，所以 Discord 和 QQ 的消息里能带上
@@ -78,7 +78,7 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 | 反馈闭环 | Issue 被关闭或有人评论时通知提交者：在线发游戏内消息，离线经 EasyBot 查 QQ 私信；长时间未处理会自动提醒管理员 |
 | 玩家可追进度 | `/iusse mine` 看自己提过的反馈，`/iusse reply <编号> <内容>` 直接往 Issue 里补说明，不用重新提一条 |
 | 重复检测 | 提交前先在未关闭的反馈里找相似的，命中时弹确认框，同一个问题不会被提十遍 |
-| 隐私打码 | 自动给正文里的 IP / QQ / 手机号 / 邮箱打码（可按分类单独关闭，举报内容默认不打码） |
+| 隐私打码 | 自动给正文里的 IP / 手机号 / 邮箱打码（可按分类单独关闭，举报内容默认不打码）；QQ 号**不打码**，因为插件本就会显示提交者的 QQ |
 | 失败重发 | 全部渠道都投递失败时存盘，之后自动重试；补发成功会通知玩家，屡次失败也会告诉他 |
 | 游戏内管理 | `/iusse list` / `close` / `stats` 让管理员不用切到浏览器就能处理反馈 |
 | 一键自检 | `/iusse test` 一次看清 PAT、仓库、标签、各渠道、EasyBot 与重发队列的状态 |
@@ -304,8 +304,11 @@ github:                      # 仓库信息与 Issue 模板
 channels:                    # 三个投递渠道，见上文
   github: { enabled: true, token: "" }          # Fine-grained PAT
   discord: { enabled: false, webhook-url: "", username: "服务器反馈", embed-color: 5793266 }
-  onebot: { enabled: false, mode: "server", bind: "127.0.0.1", port: 6700, path: "/onebot", url: "", access-token: "", group-ids: [], private-ids: [],
-            mention-player: true, show-player-qq: true }   # 群里 @ 提交者 + 显示其 QQ
+  onebot: { enabled: false, mode: "server", bind: "127.0.0.1", port: 6700, path: "/onebot", url: "", access-token: "", group-ids: [], private-ids: [] }
+
+player-qq:                   # 提交者 QQ（所有渠道共用）
+  show: true                 # 在 Issue / Discord / QQ 群里显示提交者的 QQ
+  mention-in-group: true     # QQ 群里额外 @ 他
 
 submit:
   cooldown-seconds: 300      # 同一玩家的冷却，0 表示不限制
@@ -317,7 +320,8 @@ submit:
 
   duplicate-check: true      # 提交前先找相似反馈，命中时弹确认框
   duplicate-threshold: 0.6   # 判定为疑似重复的相似度阈值（0.1 ~ 1.0）
-  mask-sensitive: true       # 自动给 IP / QQ / 手机号 / 邮箱打码
+  mask-sensitive: true       # 自动给 IP / 手机号 / 邮箱打码
+  mask-qq: false             # 是否连 QQ 一起打码（默认否，见下文「隐私打码」）
 
   retry-queue: true          # 投递全部失败时存盘等待重发
   retry-interval-minutes: 10
@@ -391,6 +395,7 @@ categories:                  # 对话框里的「反馈分类」（建议 ≤ 8 
 | 项目 | 内容 |
 | --- | --- |
 | 提交玩家 | **xcbro** |
+| 玩家 QQ | `164907681` |
 | 反馈分类 | Bug 反馈 `bug` |
 | 提交时间 | 2026-09-26 22:15:03 |
 
@@ -413,8 +418,9 @@ categories:                  # 对话框里的「反馈分类」（建议 ≤ 8 
 
 - **顶上那句提示**告诉维护者「直接回复就行了，玩家会收到通知」—— 否则他们会另跑去 QQ 群里回
 - **技术信息收进折叠块**：排查时真正要读的只有正文，UUID 与服务端版本属于「需要时才展开」
-- **表里不写玩家 QQ**：Issue 通常是公开仓库，QQ 号写进去等于公开玩家隐私。
-  QQ 号只出现在 QQ 群消息里（那是内部频道）
+- **只公开 QQ，不公开其它**：QQ 是联系玩家的最直接方式，所以写在表里；
+  IP / 手机号 / 邮箱照旧打码，UUID 收在折叠块里
+  （`player-qq.show: false` 可以让 QQ 也不出现）
 
 想回到早期那种项目符号列表就设 `github.rich-body: false`。
 
@@ -488,20 +494,24 @@ categories:                  # 对话框里的「反馈分类」（建议 ≤ 8 
 ### 隐私打码
 
 反馈正文最终会落到公开的 GitHub 仓库与 QQ 群里，而玩家经常顺手把「我的 IP 是 1.2.3.4」
-「QQ 12345678」一起写进去。插件在投递前会把这几类信息打码：
+一起写进去。插件在投递前会把这几类信息打码：
 
 | 类型 | 处理方式 |
 | --- | --- |
 | IPv4 | `1.2.3.4` → `1.2.*.*`（每段必须 ≤ 255，避免误伤版本号） |
 | 手机号 | `13812345678` → `138****5678` |
 | 邮箱 | `zhangsan@qq.com` → `z***@qq.com` |
-| QQ 号 | 只在明确写了「QQ / 扣扣 / 企鹅 / QQ 群」时才处理：`12345678` → `12*****8` |
 
 只处理高置信度的形态，宁可漏掉也不误伤。
-判到就打码并提示玩家 `（检测到疑似 IP / QQ 等隐私信息，已自动打码）`。
+判到就打码并提示玩家 `（检测到疑似 IP / 手机号 / 邮箱，已自动打码）`。
 
-举报投诉类的内容里 QQ 号是必要证据，所以那个分类用 `mask: false` 单独关掉了；
-想全局关掉就设 `submit.mask-sensitive: false`。
+> [!NOTE]
+> **QQ 号默认不打码。** 插件本来就会把提交者绑定的 QQ 显示在所有渠道里
+> （Issue 信息表 / Discord / QQ 群），正文里再把它涂掉就自相矛盾了。
+> 想彻底不让 QQ 出现，设 `submit.mask-qq: true` 并把 `player-qq.show` 改成 `false`。
+
+举报投诉需要保留原始内容（里面的玩家名、QQ 号往往是证据），
+所以那个分类用 `mask: false` 单独关掉了；想全局关掉就设 `submit.mask-sensitive: false`。
 
 ### 重复检测
 

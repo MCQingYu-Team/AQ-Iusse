@@ -63,17 +63,13 @@ public final class Sanitizer {
         }
     }
 
-    /** 按默认启用打码。 */
+    /** 按默认启用打码（含 QQ 号）。 */
     public static Result mask(String raw) {
-        return mask(raw, true);
+        return mask(raw, true, true);
     }
 
-    /**
-     * 对文本做隐私打码。
-     *
-     * @param enabled 为 false 时原样返回，且 {@link Result#isMasked()} 恒为 false
-     */
-    public static Result mask(String raw, boolean enabled) {
+    /** 按默认启用打码，但由调用方决定要不要处理 QQ 号。 */
+    public static Result mask(String raw, boolean enabled, boolean maskQq) {
         if (raw == null || raw.isEmpty() || !enabled) {
             return new Result(raw == null ? "" : raw, false);
         }
@@ -98,10 +94,12 @@ public final class Sanitizer {
             return maskEmail(matcher.group());
         });
 
-        text = replace(text, QQ, matcher -> {
-            changed[0] = true;
-            return matcher.group(1) + maskMiddle(matcher.group(2));
-        });
+        if (maskQq) {
+            text = replace(text, QQ, matcher -> {
+                changed[0] = true;
+                return matcher.group(1) + maskMiddle(matcher.group(2));
+            });
+        }
 
         return new Result(text, changed[0]);
     }

@@ -103,10 +103,19 @@ channels:
     private-ids: []
     timeout-millis: 8000
 
-    # 群里发反馈时 @ 提交者（需要 EasyBot 能查到他的 QQ；查不到就不 @）
-    mention-player: true
-    # 群里发反馈时顺带把提交者的 QQ 号写在消息里
-    show-player-qq: true
+# ------------------------------------------------------------
+# 提交者 QQ（所有渠道共用）
+# ------------------------------------------------------------
+# 玩家提交时经 EasyBot 查出他绑定的 QQ，**只查一次**，然后写进每个渠道的消息：
+#   GitHub Issue 的信息表 / Discord 的嵌入正文 / QQ 群消息
+#
+# 只有 QQ 会这样公开。IP、手机号、邮箱这类信息仍会在投递前自动打码
+# （见下面 submit.mask-sensitive）；玩家 UUID 只出现在 Issue 的折叠块里。
+player-qq:
+  # 是否在所有渠道显示提交者绑定的 QQ
+  show: true
+  # QQ 群消息里额外 @ 他（OneBot 的 CQ 码，只有 QQ 群用得到）
+  mention-in-group: true
 
 # ------------------------------------------------------------
 # 反馈跟踪（GitHub Issue 状态回传 + 处理超时提醒）
@@ -171,9 +180,13 @@ submit:
   # 判定为疑似重复的相似度阈值（0.1 ~ 1.0，越大越严格）
   duplicate-threshold: 0.6
 
-  # 自动给正文里的 IP / QQ / 手机号 / 邮箱打码（反馈通常落在公开仓库里）。
-  # 单个分类可以用 mask: false 单独关掉，见下面 categories 段。
+  # 自动给正文里的 IP / 手机号 / 邮箱打码（反馈会落到公开仓库里）。
+  # 举报投诉需要保留原始内容，已在下面 categories 里用 mask: false 单独关掉。
   mask-sensitive: true
+
+  # 是否连 QQ 号一起打码。默认否 —— 插件本身就会把提交者的 QQ 显示在所有渠道里，
+  # 正文里再把它涂掉就自相矛盾了。想彻底不出现 QQ 的服可以打开。
+  mask-qq: false
 
   # 所有渠道都投递失败时（多半是网络抖动），把这条反馈存盘等待自动重发
   retry-queue: true
