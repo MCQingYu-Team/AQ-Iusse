@@ -161,9 +161,12 @@ public class FeedbackDialog {
                 .multiline(TextDialogInput.MultilineOptions.create(Integer.valueOf(6), Integer.valueOf(200)))
                 .build());
         // 放在最后：一个单选比两个输入框快，安排在提交按钮上面顺手
-        inputs.add(DialogInput.singleOption(KEY_PRIORITY,
-                Component.text(lang.plain("dialog.priority-label")),
-                buildPriorityOptions(config, lang)).build());
+        // 只配了一个档位时就不显示 —— 没得选，多一个控件反而干扰
+        if (config.getPriorities().size() > 1) {
+            inputs.add(DialogInput.singleOption(KEY_PRIORITY,
+                    Component.text(lang.plain("dialog.priority-label")),
+                    buildPriorityOptions(config, lang)).build());
+        }
 
         final String formTitle = preset == null
                 ? lang.plain("dialog.title")
