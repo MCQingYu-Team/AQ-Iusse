@@ -1,6 +1,7 @@
 package cn.aqcraft.iusse.integration;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.bukkit.Bukkit;
@@ -9,38 +10,44 @@ import org.bukkit.plugin.Plugin;
 /**
  * EasyBot 联动：查询 MC 玩家绑定的 QQ 号。
  * <p>
- * 走的是 EasyBot 的 Bridge 扩展接口：
- *
- * <pre>
- * BridgeClient.getInstance().queryBindStatus(playerName)  →  QueryBindStatusResultPacket
- *     └─ socialAccounts: [{ platform: "qq", name: "昵称", uuid: "164907681" }, ...]
- * </pre>
- *
  * 全部用反射调用，理由有两点：
  * <ul>
  *   <li>easybot-bridge 只发布在 GitHub Packages，引入它需要额外的 Token 才能拉取依赖；</li>
  *   <li>没装 EasyBot 的服务器上不应该因为缺少这个类而报错。</li>
  * </ul>
  *
- * <h2>为什么不用「探测一次就定死」</h2>
- * 早先的写法是首次探测失败就永久降级，于是所有问题都表现为同一句话
- * 「未安装 EasyBot」—— 哪怕服务器上装得好好的。真实的失败原因至少有三类：
- * <ul>
- *   <li><b>类加载器看不到</b>：Bukkit 的插件类加载器只在 {@code softdepend} 声明后才保证顺序，
- *       EasyBot 若比本插件晚加载，那一刻确实找不到类</li>
- *   <li><b>版本过旧</b>：没有 {@code QUERY_BIND_STATUS} 这套接口</li>
- *   <li><b>Bridge 没连上</b>：类都在，但 {@code getInstance()} 返回 null（EasyBot 还没连上主程序）</li>
- * </ul>
- * 现在改成：失败也只算「本次失败」，一分钟后再试；同时把原因记下来，
- * 通过 {@link #getFailureReason()} 暴露给 {@code /iusse test} 显示。
+ * <h2>Bridge 接口是随版本变的，所以不能「一荣俱荣」</h2>
+ * 实测：EasyBot 2.3.1 的 Bridge 里有 {@code BridgeClient}，但<b>没有</b>
+ * {@code QueryBindStatusResultPacket}（那是 bridge 1.5 才加的）。
+ * 早先的写法把五个类、五个方法一次全要齐，只要有一个缺失就整体报废，
+ * 对外表现成「未安装 EasyBot」—— 排查半天其实只是版本差异。
+ * <p>
+ * 现在的结构：<b>只有 {@code BridgeClient} 与它的静态 {@code getInstance()} 是必需的</b>，
+ * 查询接口做成三套独立方案，按优先级尝试，能解析出哪套就用哪套：
+ * <ol>
+ *   <li>{@code QUERY_BIND_STATUS} —— 一次拿到所有平台（bridge 1.5+）</li>
+ *   <li>{@code GET_SOCIAL_ACCOUNT} —— 单个平台账号（旧版即有）</li>
+ *   <li>{@code GET_BIND_INFO} —— 单个绑定信息（旧版即有）</li>
+ * </ol>
+ * 另外：探测失败不会永久缓存（一分钟后自动重试），且失败原因会记录下来，
+ * 通过 {@link #getFailureReason()} 给 {@code /iusse test} 显示。
  */
 public final class EasyBotBridge {
 
     private static final String PLUGIN_NAME = "EasyBot";
     private static final String CLIENT_CLASS = "com.springwater.easybot.bridge.BridgeClient";
-    private static final String RESULT_CLASS = "com.springwater.easybot.bridge.packet.QueryBindStatusResultPacket";
-    private static final String ACCOUNT_CLASS = "com.springwater.easybot.bridge.packet.BindStatusAccount";
-    private static final String BIND_INFO_CLASS = "com.springwater.easybot.bridge.packet.GetBindInfoResultPacket";
+
+    /** Bridge 1.5 起新增的「查绑定状态」，能一次拿到所有平台。 */
+    private static final String BIND_STATUS_RESULT =
+            "com.springwater.easybot.bridge.packet.QueryBindStatusResultPacket";
+    private static final String BIND_STATUS_ACCOUNT =
+            "com.springwater.easybot.bridge.packet.BindStatusAccount";
+
+    /** 更早就存在的两条接口，作为旧版 EasyBot 的兜底。 */
+    private static final String SOCIAL_ACCOUNT_RESULT =
+            "com.springwater.easybot.bridge.packet.GetSocialAccountResultPacket";
+    private static final String BIND_INFO_RESULT =
+            "com.springwater.easybot.bridge.packet.GetBindInfoResultPacket";
 
     /** 探测失败后隔多久再试一次。 */
     private static final long RETRY_INTERVAL_MILLIS = 60000L;
@@ -51,17 +58,10 @@ public final class EasyBotBridge {
     private static long nextAttemptAt;
 
     private static ClassLoader loader;
+    /** 唯一必需的入口：BridgeClient 类本身 + 它的静态 getInstance()。 */
     private static Method getInstance;
-    private static Method queryBindStatus;
-    private static Method getSocialAccounts;
-    private static Method getPlatform;
-    private static Method getUuid;
-
-    /** 兜底通道：老版本没有 QUERY_BIND_STATUS 时退回 GET_BIND_INFO。 */
-    private static boolean bindInfoResolved;
-    private static Method getBindInfo;
-    private static Method getBindInfoPlatform;
-    private static Method getBindInfoId;
+    /** 可选的查询方案，按优先级排列；每套独立解析，能解析出哪套就用哪套。 */
+    private static final List<QueryPlan> plans = new ArrayList<QueryPlan>();
 
     private EasyBotBridge() {
     }
@@ -103,10 +103,49 @@ public final class EasyBotBridge {
 
     /** 一句话描述当前状态，用于启动日志与自检。 */
     public static String describeState() {
-        if (isAvailable()) {
-            return isReady() ? "已就绪" : "已加载，但还没连上 EasyBot 主程序";
+        if (!isAvailable()) {
+            return "未检测到（" + getFailureReason() + "）";
         }
-        return "未检测到（" + getFailureReason() + "）";
+        if (!isReady()) {
+            return "已加载，但还没连上 EasyBot 主程序";
+        }
+        QueryPlan plan = activePlan();
+        if (plan == null) {
+            return "已就绪，但查不到绑定 —— " + queryFailureSummary();
+        }
+        return "已就绪（查询方式 " + plan.label + "）";
+    }
+
+    /** 当前会使用的查询方案名，都用不了时返回空串。 */
+    public static String getQueryStrategy() {
+        isAvailable();
+        QueryPlan plan = activePlan();
+        return plan == null ? "" : plan.label;
+    }
+
+    /** 三套查询方案都不可用时的原因汇总。 */
+    public static String queryFailureSummary() {
+        isAvailable();
+        StringBuilder builder = new StringBuilder();
+        for (QueryPlan plan : plans) {
+            if (plan.isUsable()) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append("；");
+            }
+            builder.append(plan.label).append("：").append(plan.unavailable);
+        }
+        return builder.length() == 0 ? "没有可用的查询接口" : builder.toString();
+    }
+
+    private static QueryPlan activePlan() {
+        for (QueryPlan plan : plans) {
+            if (plan.isUsable()) {
+                return plan;
+            }
+        }
+        return null;
     }
 
     /**
@@ -142,34 +181,27 @@ public final class EasyBotBridge {
         // 每次重新探测前先清空旧句柄
         loader = null;
         getInstance = null;
-        queryBindStatus = null;
-        getSocialAccounts = null;
-        getPlatform = null;
-        getUuid = null;
-        bindInfoResolved = false;
-        getBindInfo = null;
-        getBindInfoPlatform = null;
-        getBindInfoId = null;
+        plans.clear();
         available = false;
 
         try {
             ClassLoader found = pickClassLoader();
             if (found == null) {
-                failure = "找不到能加载 " + CLIENT_CLASS + " 的类加载器 —— 请确认服务端装的确实是 "
-                        + PLUGIN_NAME + "（需要 2.1.2 及以上版本）";
+                failure = "找不到能加载 " + CLIENT_CLASS + " 的类加载器 —— 请确认服务端装的确实是 " + PLUGIN_NAME;
                 return;
             }
 
             // initialize=false：只取句柄，不去触发 EasyBot 的静态初始化，避免探测本身产生副作用
             Class<?> clientClass = Class.forName(CLIENT_CLASS, false, found);
-            Class<?> resultClass = Class.forName(RESULT_CLASS, false, found);
-            Class<?> accountClass = Class.forName(ACCOUNT_CLASS, false, found);
-
             getInstance = clientClass.getMethod("getInstance");
-            queryBindStatus = clientClass.getMethod("queryBindStatus", String.class);
-            getSocialAccounts = resultClass.getMethod("getSocialAccounts");
-            getPlatform = accountClass.getMethod("getPlatform");
-            getUuid = accountClass.getMethod("getUuid");
+
+            // 三套查询方案：新版优先，旧版会自动落到后面两套上
+            plans.add(buildPlan(found, clientClass, "QUERY_BIND_STATUS", "queryBindStatus",
+                    BIND_STATUS_RESULT, BIND_STATUS_ACCOUNT, "getSocialAccounts", "getPlatform", "getUuid"));
+            plans.add(buildPlan(found, clientClass, "GET_SOCIAL_ACCOUNT", "getSocialAccount",
+                    SOCIAL_ACCOUNT_RESULT, null, null, "getPlatform", "getUuid"));
+            plans.add(buildPlan(found, clientClass, "GET_BIND_INFO", "getBindInfo",
+                    BIND_INFO_RESULT, null, null, "getPlatform", "getId"));
 
             loader = found;
             available = true;
@@ -178,6 +210,47 @@ public final class EasyBotBridge {
             available = false;
             failure = describe(throwable);
         }
+    }
+
+    /**
+     * 解析一套查询方案。
+     * <p>
+     * 任何一步失败都只让这一套不可用，不影响其它方案 —— EasyBot 各版本的 Bridge 接口不一致，
+     * 「一套不通用就全部报废」正是之前误报「未安装」的根源。
+     *
+     * @param resultClassName  结果类名
+     * @param accountClassName 账号元素类名；{@code null} 表示结果对象本身就是账号
+     * @param listAccessorName 从结果对象取账号列表的方法名；{@code null} 表示结果是单个账号
+     */
+    private static QueryPlan buildPlan(ClassLoader loader, Class<?> clientClass, String label,
+                                       String clientMethodName, String resultClassName,
+                                       String accountClassName, String listAccessorName,
+                                       String platformGetterName, String idGetterName) {
+        QueryPlan plan = new QueryPlan(label);
+        try {
+            plan.entry = clientClass.getMethod(clientMethodName, String.class);
+
+            Class<?> resultClass = Class.forName(resultClassName, false, loader);
+            Class<?> accountClass = accountClassName == null
+                    ? resultClass : Class.forName(accountClassName, false, loader);
+
+            if (listAccessorName != null) {
+                plan.listAccessor = resultClass.getMethod(listAccessorName);
+                if (!List.class.isAssignableFrom(plan.listAccessor.getReturnType())) {
+                    throw new NoSuchMethodException(listAccessorName + " 的返回类型不是 List");
+                }
+            }
+            plan.accountPlatform = accountClass.getMethod(platformGetterName);
+            plan.accountId = accountClass.getMethod(idGetterName);
+        } catch (Throwable throwable) {
+            // 只废掉这一套
+            plan.entry = null;
+            plan.listAccessor = null;
+            plan.accountPlatform = null;
+            plan.accountId = null;
+            plan.unavailable = describe(throwable);
+        }
+        return plan;
     }
 
     /**
@@ -192,91 +265,96 @@ public final class EasyBotBridge {
         if (playerName == null || playerName.isEmpty() || !isAvailable()) {
             return 0L;
         }
-        long qq = queryByBindStatus(playerName);
-        if (qq > 0) {
-            return qq;
-        }
-        // 老版本 EasyBot 没有 QUERY_BIND_STATUS 时可以退回 GET_BIND_INFO
-        return queryByBindInfo(playerName);
-    }
-
-    /** 主通道：QUERY_BIND_STATUS → socialAccounts[platform=qq].uuid。 */
-    private static long queryByBindStatus(String playerName) {
+        Object client;
         try {
-            Object client = getInstance.invoke(null);
-            if (client == null) {
-                return 0L;
+            client = getInstance.invoke(null);
+        } catch (Throwable throwable) {
+            return 0L;
+        }
+        if (client == null) {
+            return 0L;
+        }
+        // 按优先级逐套尝试：新版接口在前，旧版兜底在后
+        for (QueryPlan plan : plans) {
+            long qq = plan.query(client, playerName);
+            if (qq > 0) {
+                return qq;
             }
-            Object result = queryBindStatus.invoke(client, playerName);
-            if (result == null) {
-                return 0L;
-            }
-            Object accounts = getSocialAccounts.invoke(result);
-            if (!(accounts instanceof List)) {
-                return 0L;
-            }
-            for (Object account : (List<?>) accounts) {
-                if (account == null) {
-                    continue;
-                }
-                if (!"qq".equalsIgnoreCase(String.valueOf(getPlatform.invoke(account)))) {
-                    continue;
-                }
-                long parsed = parseQq(String.valueOf(getUuid.invoke(account)));
-                if (parsed > 0) {
-                    return parsed;
-                }
-            }
-        } catch (Throwable ignored) {
-            // EasyBot 未连接、RPC 超时、玩家未绑定等都会走到这里，静默降级
         }
         return 0L;
     }
 
-    /** 兜底通道：GET_BIND_INFO → id（platform 不是 qq 时忽略）。 */
-    private static long queryByBindInfo(String playerName) {
-        if (!resolveBindInfo()) {
-            return 0L;
-        }
-        try {
-            Object client = getInstance.invoke(null);
-            if (client == null) {
-                return 0L;
-            }
-            Object result = getBindInfo.invoke(client, playerName);
-            if (result == null) {
-                return 0L;
-            }
-            Object platform = getBindInfoPlatform.invoke(result);
-            if (platform != null && !"qq".equalsIgnoreCase(String.valueOf(platform))) {
-                return 0L;
-            }
-            return parseQq(String.valueOf(getBindInfoId.invoke(result)));
-        } catch (Throwable ignored) {
-            return 0L;
-        }
-    }
+    /**
+     * 一套「怎么从 BridgeClient 问出 QQ 号」的方案。
+     * <p>
+     * 各版本的接口形状不一样（有的返回账号列表、有的只返回一个），
+     * 所以把「调哪个方法」「结果里怎么取账号」「账号里怎么取平台与号」都存成句柄，
+     * 运行期按需组合。任意一项解析失败只废掉这一套。
+     */
+    private static final class QueryPlan {
 
-    /** 延迟解析兜底通道的句柄，失败一次就记住不再试。 */
-    private static synchronized boolean resolveBindInfo() {
-        if (bindInfoResolved) {
-            return getBindInfo != null;
+        /** 方案名，取自 EasyBot 的 operation 名，便于对着日志看。 */
+        final String label;
+        /** BridgeClient 上的入口方法。为 null 表示这套不可用。 */
+        Method entry;
+        /** 从结果对象取账号列表；为 null 表示结果对象本身就是账号。 */
+        Method listAccessor;
+        Method accountPlatform;
+        Method accountId;
+        /** 不可用原因；可用时为空串。 */
+        String unavailable = "";
+
+        QueryPlan(String label) {
+            this.label = label;
         }
-        bindInfoResolved = true;
-        try {
-            ClassLoader target = loader != null ? loader : pickClassLoader();
-            if (target == null) {
-                return false;
+
+        boolean isUsable() {
+            return entry != null;
+        }
+
+        /** 查指定玩家的 QQ 号，查不到返回 0。 */
+        long query(Object client, String playerName) {
+            if (!isUsable()) {
+                return 0L;
             }
-            Class<?> clientClass = Class.forName(CLIENT_CLASS, false, target);
-            Class<?> infoClass = Class.forName(BIND_INFO_CLASS, false, target);
-            getBindInfo = clientClass.getMethod("getBindInfo", String.class);
-            getBindInfoPlatform = infoClass.getMethod("getPlatform");
-            getBindInfoId = infoClass.getMethod("getId");
-            return true;
-        } catch (Throwable throwable) {
-            getBindInfo = null;
-            return false;
+            try {
+                Object result = entry.invoke(client, playerName);
+                if (result == null) {
+                    return 0L;
+                }
+                if (listAccessor == null) {
+                    return read(result);
+                }
+                Object accounts = listAccessor.invoke(result);
+                if (!(accounts instanceof List)) {
+                    return 0L;
+                }
+                for (Object account : (List<?>) accounts) {
+                    long qq = read(account);
+                    if (qq > 0) {
+                        return qq;
+                    }
+                }
+            } catch (Throwable ignored) {
+                // 未绑定、RPC 超时、EasyBot 未连接等都会走到这里，静默降级
+            }
+            return 0L;
+        }
+
+        /** 从一个账号对象里取 QQ 号；平台不是 qq 时返回 0。 */
+        private long read(Object account) {
+            if (account == null || accountPlatform == null || accountId == null) {
+                return 0L;
+            }
+            try {
+                Object platform = accountPlatform.invoke(account);
+                if (platform != null && !"qq".equalsIgnoreCase(String.valueOf(platform))) {
+                    return 0L;
+                }
+                return parseQq(String.valueOf(accountId.invoke(account)));
+            } catch (Throwable throwable) {
+                return 0L;
+            }
         }
     }
 

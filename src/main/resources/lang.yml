@@ -170,6 +170,7 @@ qq:
   checking: "&7正在查询 &f{player} &7绑定的 QQ……"
   easybot-missing: "&cEasyBot 不可用：&f{detail}"
   easybot-not-ready: "&eEasyBot 已加载，但还没连上主程序，暂时查不到绑定。请确认 EasyBot 已在群聊里上线。"
+  easybot-no-query: "&eEasyBot 已连接，但当前版本没有可用的查询接口：&7{detail}"
   unbound: "&e玩家 &f{player} &e没有绑定 QQ。"
   bound: "&a玩家 &f{player} &a绑定的 QQ：&f{qq}"
   sent: "&a测试私信已发送到 &f{qq}&a，去 QQ 上看看收到没有。"

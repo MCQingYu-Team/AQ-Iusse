@@ -480,14 +480,19 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
     }
 
     private void collectIntegrationChecks(List<String[]> rows) {
-        if (EasyBotBridge.isAvailable() && EasyBotBridge.isReady()) {
-            rows.add(new String[]{"ok", "EasyBot", "已就绪，可用 /iusse qq <玩家> 查询绑定的 QQ"});
-        } else if (EasyBotBridge.isAvailable()) {
-            rows.add(new String[]{"warn", "EasyBot",
-                    "插件已加载，但还没连上 EasyBot 主程序 —— 查绑定会失败"});
-        } else {
+        if (!EasyBotBridge.isAvailable()) {
             rows.add(new String[]{"fail", "EasyBot", EasyBotBridge.describePluginPresence()
                     + "；" + EasyBotBridge.getFailureReason()});
+        } else if (!EasyBotBridge.isReady()) {
+            rows.add(new String[]{"warn", "EasyBot",
+                    "插件已加载，但还没连上 EasyBot 主程序 —— 查绑定会失败"});
+        } else if (EasyBotBridge.getQueryStrategy().isEmpty()) {
+            rows.add(new String[]{"warn", "EasyBot",
+                    "已连接，但本插件的查询接口在这个 EasyBot 版本上不可用："
+                            + EasyBotBridge.queryFailureSummary()});
+        } else {
+            rows.add(new String[]{"ok", "EasyBot", "已就绪（查询方式 "
+                    + EasyBotBridge.getQueryStrategy() + "），可用 /iusse qq <玩家>"});
         }
         rows.add(new String[]{"ok", "反馈跟踪", "已记录 " + plugin.getIssueTracker().size()
                 + " 条｜待重发 " + plugin.getFeedbackQueue().size() + " 条"});
@@ -529,8 +534,10 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
             public void run() {
                 final boolean easybot = EasyBotBridge.isAvailable();
                 final boolean ready = easybot && EasyBotBridge.isReady();
-                final String easybotDetail = EasyBotBridge.getFailureReason();
-                long qq = ready ? EasyBotBridge.queryQq(target) : 0L;
+                final boolean queryable = ready && !EasyBotBridge.getQueryStrategy().isEmpty();
+                final String easybotDetail = easybot
+                        ? EasyBotBridge.queryFailureSummary() : EasyBotBridge.getFailureReason();
+                long qq = queryable ? EasyBotBridge.queryQq(target) : 0L;
 
                 boolean sent = false;
                 String sendError = null;
@@ -564,6 +571,10 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                         }
                         if (!ready) {
                             plugin.send(player, "qq.easybot-not-ready");
+                            return;
+                        }
+                        if (!queryable) {
+                            plugin.send(player, "qq.easybot-no-query", "detail", easybotDetail);
                             return;
                         }
                         if (account <= 0) {
