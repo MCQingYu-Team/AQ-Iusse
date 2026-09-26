@@ -5,6 +5,7 @@ import java.net.Proxy;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.bukkit.configuration.file.FileConfiguration;
@@ -50,8 +51,10 @@ public class PluginConfig {
     private String discordUsername;
     private int discordEmbedColor;
 
-    // 渠道：OneBot 反向 WebSocket
+    // 渠道：OneBot（server = 反向 WS 服务端；client = 主动连 NapCat 的正向 WS）
     private boolean onebotEnabled;
+    private String onebotMode;
+    private String onebotUrl;
     private int onebotPort;
     private String onebotBind;
     private String onebotPath;
@@ -104,6 +107,8 @@ public class PluginConfig {
         discordEmbedColor = config.getInt("channels.discord.embed-color", 0x5865F2);
 
         onebotEnabled = config.getBoolean("channels.onebot.enabled", false);
+        onebotMode = config.getString("channels.onebot.mode", "server").trim().toLowerCase(Locale.ROOT);
+        onebotUrl = config.getString("channels.onebot.url", "").trim();
         onebotPort = config.getInt("channels.onebot.port", 6700);
         onebotBind = config.getString("channels.onebot.bind", "127.0.0.1");
         onebotPath = config.getString("channels.onebot.path", "/onebot");
@@ -264,6 +269,20 @@ public class PluginConfig {
 
     public boolean isOneBotEnabled() {
         return onebotEnabled;
+    }
+
+    /** true 表示插件主动去连 NapCat 的 WebSocket 服务端（正向 WS）。 */
+    public boolean isOneBotClientMode() {
+        return "client".equals(onebotMode);
+    }
+
+    public String getOneBotMode() {
+        return onebotMode == null || onebotMode.isEmpty() ? "server" : onebotMode;
+    }
+
+    /** 客户端模式下要连接的地址，形如 ws://host:port/path。 */
+    public String getOneBotUrl() {
+        return onebotUrl == null ? "" : onebotUrl;
     }
 
     public int getOneBotPort() {

@@ -69,14 +69,24 @@ channels:
     # 左侧色条的十进制颜色
     embed-color: 5793266
 
-  # OneBot（QQ），采用反向 WebSocket：插件监听端口，NapCat 主动连过来
+  # OneBot（QQ）。两种接法二选一：
+  #   server = 插件监听端口，NapCat 主动连过来（反向 WS）
+  #   client = 插件主动连 NapCat 的「WebSocket 服务端」（正向 WS），
+  #            适用于插件所在机器不能被 NapCat 访问、但 NapCat 那台有公网端口映射的情况
   onebot:
     enabled: false
-    # 绑定网卡。NapCat 与服务器同机时保持 127.0.0.1 即可
+    mode: "server"
+
+    # mode: server 时生效 —— 插件监听的网卡与端口
+    # bind 用 127.0.0.1 仅限 NapCat 与服务器同机；跨机请改 0.0.0.0 并放行端口
     bind: "127.0.0.1"
     port: 6700
     path: "/onebot"
-    # 与 NapCat 反向 WS 的 token 保持一致，留空表示不校验
+
+    # mode: client 时生效 —— 要连接的 NapCat 地址
+    url: "ws://example.com:8082"
+
+    # 与 NapCat 侧的 token 保持一致，留空表示不校验
     access-token: ""
     # 要发到哪些群（QQ 群号）
     group-ids: []

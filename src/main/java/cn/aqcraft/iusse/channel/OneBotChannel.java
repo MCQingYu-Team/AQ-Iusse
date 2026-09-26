@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -24,16 +25,17 @@ import cn.aqcraft.iusse.net.WebSocketConnection;
 import cn.aqcraft.iusse.util.Text;
 
 /**
- * OneBot（QQ）通道：以**反向 WebSocket** 接入。
- * <p>
- * 插件自己当 WebSocket 服务端，由 NapCat / go-cqhttp 主动连过来。
- * NapCat 侧配置示例：
- *
- * <pre>
- * "reverseWs": { "enable": true, "urls": ["ws://127.0.0.1:6700/onebot"] }
- * </pre>
- *
- * 连接建立后，插件通过 {@code send_group_msg} 把反馈发到指定群。
+ * OneBot（QQ）通道，支持两种接法：
+ * <ul>
+ *   <li>{@code mode: server}（默认）—— <b>反向 WebSocket</b>：插件自己当服务端监听端口，
+ *       由 NapCat 主动连过来。NapCat 侧配「WebSocket 客户端」：
+ *       <pre>"reverseWs": { "enable": true, "urls": ["ws://127.0.0.1:6700/onebot"] }</pre></li>
+ *   <li>{@code mode: client} —— <b>正向 WebSocket</b>：插件主动去连 NapCat 的
+ *       「WebSocket 服务端」。适用于插件所在机器不能被 NapCat 访问、
+ *       但 NapCat 那台有公网端口映射的场景。NapCat 侧配「WebSocket 服务端」，
+ *       插件填 {@code url: "ws://host:port"}。</li>
+ * </ul>
+ * 两种模式下发消息都是 {@code send_group_msg}。
  */
 public class OneBotChannel implements Channel {
 
@@ -42,12 +44,16 @@ public class OneBotChannel implements Channel {
     /** QQ 单条消息不要太长，超出会被服务端截断。 */
     private static final int MAX_MESSAGE_LENGTH = 1500;
 
+    /** 断线重连间隔。 */
+    private static final long RECONNECT_INTERVAL_MILLIS = 5000L;
+
     private final AqIssuePlugin plugin;
     private final PluginConfig config;
     private final Set<Connection> connections =
             Collections.newSetFromMap(new ConcurrentHashMap<Connection, Boolean>());
 
     private volatile ServerSocket serverSocket;
+    private volatile Thread clientThread;
     private volatile boolean running;
     private final String disabledReason;
 
@@ -58,9 +64,19 @@ public class OneBotChannel implements Channel {
         String reason = null;
         if (!config.isOneBotEnabled()) {
             reason = "配置中未启用";
+        } else if (config.isOneBotClientMode()) {
+            String url = config.getOneBotUrl();
+            if (url.isEmpty()) {
+                reason = "client 模式下必须填写 channels.onebot.url";
+            } else if (url.startsWith("wss://")) {
+                reason = "暂不支持 wss://，请改用 ws://";
+            } else if (!url.startsWith("ws://")) {
+                reason = "url 必须以 ws:// 开头";
+            }
         } else if (config.getOneBotPort() <= 0 || config.getOneBotPort() > 65535) {
             reason = "端口不合法";
-        } else if (config.getOneBotGroupIds().isEmpty()) {
+        }
+        if (reason == null && config.getOneBotGroupIds().isEmpty()) {
             reason = "未配置 channels.onebot.group-ids（要发到哪个群）";
         }
         this.disabledReason = reason;
@@ -92,11 +108,20 @@ public class OneBotChannel implements Channel {
 
     @Override
     public void start() throws IOException {
+        this.running = true;
+        if (config.isOneBotClientMode()) {
+            startClient();
+        } else {
+            startServer();
+        }
+    }
+
+    /** 反向 WS：插件监听端口，等 NapCat 连过来。 */
+    private void startServer() throws IOException {
         ServerSocket server = new ServerSocket();
         server.setReuseAddress(true);
         server.bind(new InetSocketAddress(config.getOneBotBind(), config.getOneBotPort()));
         this.serverSocket = server;
-        this.running = true;
 
         Thread thread = new Thread(new Runnable() {
             @Override
@@ -112,9 +137,80 @@ public class OneBotChannel implements Channel {
                 + "（等待 NapCat 连接）");
     }
 
+    /** 正向 WS：插件主动去连 NapCat 的 WebSocket 服务端。 */
+    private void startClient() {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                connectLoop();
+            }
+        }, "AQIssue-OneBot-Connect");
+        thread.setDaemon(true);
+        this.clientThread = thread;
+        thread.start();
+        plugin.getLogger().info("OneBot 客户端模式：准备连接 " + config.getOneBotUrl());
+    }
+
+    /** 断线重连循环。 */
+    private void connectLoop() {
+        while (running) {
+            try {
+                openConnection();
+            } catch (Exception e) {
+                if (running) {
+                    String message = e.getMessage();
+                    plugin.getLogger().warning("连接 OneBot 服务端失败（" + config.getOneBotUrl() + "）："
+                            + (message == null || message.isEmpty() ? e.getClass().getSimpleName() : message)
+                            + "，" + (RECONNECT_INTERVAL_MILLIS / 1000L) + " 秒后重试");
+                }
+            }
+            if (!running) {
+                return;
+            }
+            try {
+                Thread.sleep(RECONNECT_INTERVAL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    /** 建立一次连接，然后阻塞读取直到断开。 */
+    private void openConnection() throws IOException {
+        URI uri = URI.create(config.getOneBotUrl());
+        String host = uri.getHost();
+        if (host == null || host.isEmpty()) {
+            throw new IOException("url 解析失败，应形如 ws://host:port");
+        }
+        int port = uri.getPort() > 0 ? uri.getPort() : 80;
+        String path = uri.getPath() == null || uri.getPath().isEmpty() ? "/" : uri.getPath();
+
+        Socket socket = new Socket();
+        socket.connect(new InetSocketAddress(host, port),
+                (int) Math.min(config.getTimeoutMillis(), 10000L));
+
+        WebSocketConnection ws = new WebSocketConnection(socket, true);
+        if (!ws.clientHandshake(host, port, path, config.getOneBotAccessToken(),
+                (int) config.getTimeoutMillis())) {
+            ws.close();
+            throw new IOException("握手被拒绝，请检查路径与 access-token");
+        }
+
+        Connection connection = new Connection(ws);
+        connections.add(connection);
+        plugin.getLogger().info("已连接到 OneBot 服务端 " + config.getOneBotUrl());
+        readLoop(connection);
+    }
+
     @Override
     public void stop() {
         running = false;
+        Thread thread = clientThread;
+        if (thread != null) {
+            thread.interrupt();
+            clientThread = null;
+        }
         ServerSocket server = serverSocket;
         if (server != null) {
             try {
@@ -185,7 +281,6 @@ public class OneBotChannel implements Channel {
             }
         }, "AQIssue-OneBot-Reader");
         reader.setDaemon(true);
-        connection.reader = reader;
         reader.start();
     }
 
@@ -203,7 +298,7 @@ public class OneBotChannel implements Channel {
         } finally {
             connections.remove(connection);
             connection.ws.close();
-            plugin.getLogger().info("OneBot 客户端已断开：" + connection.remote());
+            plugin.getLogger().info("OneBot 连接已断开：" + connection.remote());
         }
     }
 
@@ -291,6 +386,11 @@ public class OneBotChannel implements Channel {
     @Override
     public String checkStatus() {
         int count = connections.size();
+        if (config.isOneBotClientMode()) {
+            return count > 0
+                    ? "已连接到 " + config.getOneBotUrl()
+                    : "未连接（正在重试 " + config.getOneBotUrl() + "）";
+        }
         if (count == 0) {
             return "已监听 " + config.getOneBotBind() + ":" + config.getOneBotPort() + "，但暂无客户端连接";
         }
@@ -381,7 +481,6 @@ public class OneBotChannel implements Channel {
         final WebSocketConnection ws;
         final Map<String, CompletableFuture<Map<String, Object>>> pending =
                 new ConcurrentHashMap<String, CompletableFuture<Map<String, Object>>>();
-        volatile Thread reader;
 
         Connection(WebSocketConnection ws) {
             this.ws = ws;

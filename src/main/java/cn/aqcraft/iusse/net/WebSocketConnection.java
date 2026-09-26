@@ -10,16 +10,21 @@ import java.net.Socket;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 最小实现的 WebSocket 服务端连接（RFC 6455）。
+ * 最小实现的 WebSocket 连接（RFC 6455）。
  * <p>
- * JDK 只提供 WebSocket <b>客户端</b>，而 OneBot 的反向 WebSocket 需要插件当服务端，
- * 所以这里手写握手与帧编解码。只实现 OneBot 用得到的部分：
- * 文本帧、Ping/Pong、关闭帧。
+ * 同一份代码支持两个方向：
+ * <ul>
+ *   <li><b>服务端</b>：插件监听端口，NapCat 主动连过来（反向 WS），走 {@link #handshake()}</li>
+ *   <li><b>客户端</b>：插件主动连 NapCat 的 WS 服务端（正向 WS），走
+ *       {@link #clientHandshake(String, int, String, String, int)}</li>
+ * </ul>
+ * 只实现 OneBot 用得到的部分：文本帧、Ping/Pong、关闭帧。
  */
 public class WebSocketConnection {
 
@@ -32,17 +37,26 @@ public class WebSocketConnection {
     private static final int OPCODE_CLOSE = 0x8;
     private static final int OPCODE_PING = 0x9;
 
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private final Socket socket;
     private final InputStream in;
     private final OutputStream out;
     private final Object writeLock = new Object();
+    /** 客户端模式下发出的帧必须加掩码（RFC 6455 §5.3），否则对端会当作协议错误断开。 */
+    private final boolean maskOutgoing;
     private volatile boolean open = true;
 
     public WebSocketConnection(Socket socket) throws IOException {
+        this(socket, false);
+    }
+
+    public WebSocketConnection(Socket socket, boolean maskOutgoing) throws IOException {
         this.socket = socket;
         this.socket.setTcpNoDelay(true);
         this.in = new BufferedInputStream(socket.getInputStream());
         this.out = new BufferedOutputStream(socket.getOutputStream());
+        this.maskOutgoing = maskOutgoing;
     }
 
     public String getRemoteAddress() {
@@ -86,6 +100,55 @@ public class WebSocketConnection {
                 + "Connection: Upgrade\r\n"
                 + "Sec-WebSocket-Accept: " + accept + "\r\n\r\n");
         return headers;
+    }
+
+    /**
+     * 作为客户端发起 WebSocket 握手（插件主动连 NapCat 的「WebSocket 服务端」）。
+     *
+     * @param token 非空时以 {@code Authorization: Bearer} 头带上
+     * @return 握手成功返回 true；对端未返回 101 时返回 false
+     */
+    public boolean clientHandshake(String host, int port, String path, String token, int timeoutMillis)
+            throws IOException {
+        socket.setSoTimeout(Math.max(1000, timeoutMillis));
+
+        byte[] nonce = new byte[16];
+        RANDOM.nextBytes(nonce);
+        String key = Base64.getEncoder().encodeToString(nonce);
+
+        StringBuilder request = new StringBuilder(256);
+        request.append("GET ").append(path == null || path.isEmpty() ? "/" : path).append(" HTTP/1.1\r\n");
+        request.append("Host: ").append(host).append(':').append(port).append("\r\n");
+        request.append("Upgrade: websocket\r\n");
+        request.append("Connection: Upgrade\r\n");
+        request.append("Sec-WebSocket-Key: ").append(key).append("\r\n");
+        request.append("Sec-WebSocket-Version: 13\r\n");
+        if (token != null && !token.isEmpty()) {
+            request.append("Authorization: Bearer ").append(token).append("\r\n");
+        }
+        request.append("\r\n");
+        writeRaw(request.toString());
+
+        String statusLine = readLine();
+        if (statusLine == null || statusLine.indexOf("101") < 0) {
+            return false;
+        }
+        String accept = base64(sha1(key + HANDSHAKE_MAGIC));
+        boolean acceptMatched = false;
+        String line;
+        while ((line = readLine()) != null && !line.isEmpty()) {
+            int separator = line.indexOf(':');
+            if (separator > 0
+                    && "sec-websocket-accept".equalsIgnoreCase(line.substring(0, separator).trim())
+                    && accept.equals(line.substring(separator + 1).trim())) {
+                acceptMatched = true;
+            }
+        }
+        if (!acceptMatched) {
+            return false;
+        }
+        socket.setSoTimeout(0);
+        return true;
     }
 
     /**
@@ -169,21 +232,37 @@ public class WebSocketConnection {
         if (socket.isClosed()) {
             throw new IOException("连接已关闭");
         }
-        ByteArrayOutputStream frame = new ByteArrayOutputStream(payload.length + 10);
-        frame.write(0x80 | opcode);
-        if (payload.length < 126) {
-            frame.write(payload.length);
-        } else if (payload.length <= 0xFFFF) {
-            frame.write(126);
-            frame.write((payload.length >> 8) & 0xFF);
-            frame.write(payload.length & 0xFF);
-        } else {
-            frame.write(127);
-            for (int shift = 56; shift >= 0; shift -= 8) {
-                frame.write((int) (((long) payload.length >> shift) & 0xFF));
+
+        byte[] mask = null;
+        byte[] data = payload;
+        if (maskOutgoing) {
+            mask = new byte[4];
+            RANDOM.nextBytes(mask);
+            data = new byte[payload.length];
+            for (int index = 0; index < payload.length; index++) {
+                data[index] = (byte) (payload[index] ^ mask[index % 4]);
             }
         }
-        frame.write(payload, 0, payload.length);
+
+        ByteArrayOutputStream frame = new ByteArrayOutputStream(data.length + 14);
+        frame.write(0x80 | opcode);
+        int maskBit = maskOutgoing ? 0x80 : 0x00;
+        if (data.length < 126) {
+            frame.write(maskBit | data.length);
+        } else if (data.length <= 0xFFFF) {
+            frame.write(maskBit | 126);
+            frame.write((data.length >> 8) & 0xFF);
+            frame.write(data.length & 0xFF);
+        } else {
+            frame.write(maskBit | 127);
+            for (int shift = 56; shift >= 0; shift -= 8) {
+                frame.write((int) (((long) data.length >> shift) & 0xFF));
+            }
+        }
+        if (mask != null) {
+            frame.write(mask, 0, 4);
+        }
+        frame.write(data, 0, data.length);
 
         synchronized (writeLock) {
             out.write(frame.toByteArray());

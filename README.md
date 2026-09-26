@@ -48,7 +48,7 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 | --- | --- | --- |
 | **GitHub** | Fine-grained PAT | 只需给目标仓库勾一个 `Issues: Read and write`，一分钟建好；不用建 App、不用私钥文件 |
 | **Discord** | 频道 Webhook | 不需要机器人常驻在线，复制一个 URL 就能用 |
-| **QQ** | OneBot **反向** WebSocket | 插件监听端口，NapCat / go-cqhttp 主动连过来；插件侧不需要装任何 QQ 协议库 |
+| **QQ** | OneBot（反向 / 正向 WS 均可） | 插件侧不需要装任何 QQ 协议库；既能等 NapCat 连过来，也能由插件主动连出去，断线自动重连 |
 
 三个渠道各自独立开关，可只开其中一个，也可以全开。
 
@@ -132,40 +132,65 @@ channels:
 
 ## 配置 OneBot（QQ）
 
-采用的是**反向 WebSocket**：插件在服务端开一个 WebSocket 端口，由 NapCat 主动连过来。
+NapCat 支持两种接法，**先想清楚连接由哪边发起**再选：
 
-**1. 插件侧配置**
+| 模式 | 连接方向 | 何时用 |
+| --- | --- | --- |
+| `server`（默认） | **NapCat → 插件**（反向 WS） | NapCat 能访问到 MC 服务器（两者同机，或 MC 服务器可对外开放端口） |
+| `client` | **插件 → NapCat**（正向 WS） | MC 服务器开不了入站端口，而 NapCat 那台有公网 / 端口映射 |
+
+### 模式一：`server`（反向 WS）
+
+插件监听端口，等 NapCat 连过来。
 
 ```yaml
 channels:
   onebot:
     enabled: true
-    bind: "127.0.0.1"      # NapCat 与服务器同机时保持 127.0.0.1
+    mode: "server"
+    bind: "127.0.0.1"      # NapCat 与服务器同机用这个；跨机请改 0.0.0.0 并放行端口
     port: 6700
     path: "/onebot"
     access-token: ""        # 与 NapCat 侧保持一致，留空则不校验
-    group-ids: [108441415]  # 要发到哪些 QQ 群
+    group-ids: [1102137231]  # 要发到哪些 QQ 群
     timeout-millis: 8000
 ```
 
-**2. NapCat 侧配置**
+NapCat 侧：WebUI（默认 <http://localhost:6099>）→ **网络配置** → 新建 **WebSocket 客户端（反向）**，
+URL 填 `ws://<MC服务器IP>:6700/onebot`，Token 与 `access-token` 一致，创建时勾上「保存时启用」。
 
-在 NapCat 的 WebUI（默认 <http://localhost:6099>）里进入 **网络配置**，
-新建一个 **WebSocket 客户端（反向）**，URL 填：
+连上后插件控制台会打印 `OneBot 客户端已连接：/xxx`。
 
+### 模式二：`client`（正向 WS，插件主动连）
+
+适合「MC 服务器开不了入站端口，但 NapCat 那台有公网端口映射」的场景。
+
+**NapCat 侧**：网络配置 → 新建 **WebSocket 服务端**（不是客户端！），记下它监听的端口（例如 8082），
+需要的话填上 token；然后在云厂商控制台把该端口映射到公网（例如 外网 43295 → 内网 8082）。
+
+**插件侧**
+
+```yaml
+channels:
+  onebot:
+    enabled: true
+    mode: "client"
+    url: "ws://p1.example.com:43295"   # NapCat 那台的对外地址
+    access-token: "AQIssue"             # 与 NapCat 侧一致
+    group-ids: [1102137231]
+    timeout-millis: 8000
 ```
-ws://127.0.0.1:6700/onebot
-```
 
-Token 与插件里的 `access-token` 保持一致（两边都留空也可以）。
+插件连上后控制台打印 `已连接到 OneBot 服务端 ws://...`；断线每 5 秒自动重连。
 
 > [!NOTE]
-> 不同版本的 NapCat 里这个菜单可能叫「反向 WebSocket」「Websocket Client」等，认准 **客户端 / 反向 / 主动连接插件** 即可。
-> 配置保存后插件控制台会打印 `OneBot 客户端已连接：/127.0.0.1:xxxxx`。
+> 不同 NapCat 版本里菜单名可能是「WebSocket 服务端」「Websocket Server」等，
+> 认准**只填监听端口、不需要填 URL** 的那个就是服务端。
+> 目前插件只支持 `ws://`，不支持 `wss://`。
 
 > [!WARNING]
-> 如果 NapCat 与 Minecraft 服务器**不在同一台机器**上，需要把 `bind` 改成 `0.0.0.0`，
-> 并在防火墙放行该端口 —— 此时**务必设置 `access-token`**，否则任何人连上来都能往群里发消息。
+> `mode: client` 且 URL 指向公网时，**`access-token` 是唯一的门禁**，务必用足够长的随机串
+> （`openssl rand -hex 16`），别用能被猜到的值 —— 否则任何人都能往你的群里发消息。
 
 ## 配置总览
 
@@ -189,7 +214,7 @@ github:                      # 仓库信息与 Issue 模板
 channels:                    # 三个投递渠道，见上文
   github: { enabled: true, token: "" }          # Fine-grained PAT
   discord: { enabled: false, webhook-url: "", username: "服务器反馈", embed-color: 5793266 }
-  onebot: { enabled: false, bind: "127.0.0.1", port: 6700, path: "/onebot", access-token: "", group-ids: [] }
+  onebot: { enabled: false, mode: "server", bind: "127.0.0.1", port: 6700, path: "/onebot", url: "", access-token: "", group-ids: [] }
 
 submit:
   cooldown-seconds: 300      # 同一玩家的冷却，0 表示不限制
@@ -264,11 +289,11 @@ src/main/java/cn/aqcraft/iusse/
 │   ├─ Submission.java             与渠道无关的反馈数据
 │   ├─ GitHubChannel.java          GitHub Issue
 │   ├─ DiscordChannel.java         Discord Webhook
-│   └─ OneBotChannel.java          OneBot 反向 WebSocket 服务端
+│   └─ OneBotChannel.java          OneBot（反向 WS 服务端 / 正向 WS 客户端）
 ├─ github/MiniJson.java            极简 JSON 编解码
 ├─ net/
 │   ├─ Http.java                   共用 HTTP 客户端
-│   └─ WebSocketConnection.java    手写 WebSocket 服务端连接
+│   └─ WebSocketConnection.java    手写 WebSocket 连接（服务端 + 客户端）
 ├─ config/                         PluginConfig / LangConfig / Category
 ├─ session/CooldownManager.java    提交冷却
 └─ util/Text.java                  颜色代码处理
