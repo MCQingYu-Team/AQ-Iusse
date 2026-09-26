@@ -225,6 +225,38 @@ dialog:
   show-icon: true
 
 # ------------------------------------------------------------
+# 优先级（对话框里的「优先级」下拉框 + /iusse priority 指令）
+# ------------------------------------------------------------
+# GitHub 的 Issue 本身没有内建的 Priority 字段，所以这里用「标签」来落地：
+# 每个档位映射到一个标签，改优先级 = 换标签，在 Issue 列表页能直接按标签筛选。
+#
+# id        /iusse priority <编号> <id> 用；也是一行式提交 !id 里写的值
+# name      游戏内显示的名字
+# label     映射到的 GitHub 标签；留空表示「不加标签」= 没有优先级
+# default   true 的那个档位是对话框里默认选中的（只认第一个 true）
+#
+# 建议默认档位留空 label：普通反馈不加标签，Issue 列表才干净，
+# 真正被标上 priority: high / urgent 的才是需要插队的。
+# 注意：标签必须先在仓库里建好，否则 GitHub 会静默忽略；用 /iusse test 可以查出缺哪些
+priorities:
+  - id: "low"
+    name: "低"
+    label: "priority: low"
+
+  - id: "normal"
+    name: "普通"
+    label: ""
+    default: true
+
+  - id: "high"
+    name: "高"
+    label: "priority: high"
+
+  - id: "urgent"
+    name: "紧急"
+    label: "priority: urgent"
+
+# ------------------------------------------------------------
 # 反馈分类（对话框里「反馈分类」下拉框的选项）
 # ------------------------------------------------------------
 # id          用于 /iusse submit <id> ...，也是写入 GitHub 的标签来源

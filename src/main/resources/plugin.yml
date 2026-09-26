@@ -14,11 +14,12 @@ commands:
     description: 打开反馈对话框，或直接提交一条反馈
     usage: |
       /iusse              打开反馈对话框
-      /iusse submit <分类> <标题>|<内容>
+      /iusse submit <分类> <标题>|<内容> [!级别]
       /iusse mine         查看我提交过的反馈
       /iusse reply <编号> <内容>
       /iusse list         列出反馈（管理员）
       /iusse close <编号> [理由]（管理员）
+      /iusse priority <编号> <级别>（管理员）
       /iusse stats        反馈统计（管理员）
       /iusse test         自检各渠道（管理员）
       /iusse qq <玩家>    查询玩家绑定的 QQ（管理员）

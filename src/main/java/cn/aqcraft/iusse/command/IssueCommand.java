@@ -21,6 +21,7 @@ import cn.aqcraft.iusse.channel.Channel;
 import cn.aqcraft.iusse.channel.OneBotChannel;
 import cn.aqcraft.iusse.config.Category;
 import cn.aqcraft.iusse.config.PluginConfig;
+import cn.aqcraft.iusse.config.Priority;
 import cn.aqcraft.iusse.github.GitHubApi;
 import cn.aqcraft.iusse.github.MiniJson;
 import cn.aqcraft.iusse.integration.EasyBotBridge;
@@ -47,14 +48,15 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
     private static final String USAGE_QQ = "/iusse qq <玩家> [测试消息]";
     private static final String USAGE_AT = "/iusse at <玩家> [消息]";
     private static final String USAGE_LIST = "/iusse list [open|closed|all]";
+    private static final String USAGE_PRIORITY = "/iusse priority <编号> <级别>";
 
     private static final List<String> SUB_COMMANDS =
-            Arrays.asList("submit", "mine", "reply", "url", "status", "list", "close", "stats", "test", "qq",
-                    "at", "reload", "help");
+            Arrays.asList("submit", "mine", "reply", "url", "status", "list", "priority", "close", "stats",
+                    "test", "qq", "at", "reload", "help");
 
     /** 只有管理员能用的子指令。 */
     private static final List<String> ADMIN_SUB_COMMANDS =
-            Arrays.asList("status", "list", "close", "stats", "test", "qq", "at", "reload");
+            Arrays.asList("status", "list", "priority", "close", "stats", "test", "qq", "at", "reload");
 
     private final AqIssuePlugin plugin;
 
@@ -100,6 +102,11 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
             case "list":
                 if (requireAdmin(player)) {
                     handleList(player, args);
+                }
+                return true;
+            case "priority":
+                if (requireAdmin(player)) {
+                    handlePriority(player, args);
                 }
                 return true;
             case "close":
@@ -155,7 +162,19 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
         }
         String title = rest.substring(0, separator).trim();
         String body = rest.substring(separator + 1).trim();
-        plugin.submitFromInput(player, categoryId, title, body);
+
+        // 内容末尾可以跟一个 !优先级，例如：...|放方块时卡一下 !high
+        // 用 ! 开头是为了不和正文里碰巧出现的级别名混淆
+        String priorityId = "";
+        int mark = body.lastIndexOf('!');
+        if (mark >= 0 && body.indexOf(' ', mark) < 0) {
+            Priority priority = plugin.getPluginConfig().findPriority(body.substring(mark + 1));
+            if (priority != null) {
+                priorityId = priority.getId();
+                body = body.substring(0, mark).trim();
+            }
+        }
+        plugin.submitFromInput(player, categoryId, title, body, priorityId);
     }
 
     // ------------------------------------------------------------------
@@ -306,6 +325,7 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                         "number", record.number,
                         "title", Text.truncate(record.title, 24),
                         "category", record.categoryName,
+                        "priority", priorityTag(record),
                         "player", record.playerName));
                 continue;
             }
@@ -314,6 +334,7 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                     "number", record.number,
                     "title", Text.truncate(record.title, 24),
                     "category", record.categoryName,
+                    "priority", priorityTag(record),
                     "player", record.playerName,
                     "age", IssueStats.hoursSince(record.submittedAt, now)));
         }
@@ -380,6 +401,101 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
     }
 
     /** {@code /iusse stats} —— 全部基于本地记录，不消耗 API 额度。 */
+    /**
+     * {@code /iusse priority <编号> <级别>} —— 改一条反馈的优先级。
+     * <p>
+     * 实现上就是换标签：GitHub 的 {@code PUT .../labels} 是<b>全量覆盖</b>，
+     * 所以先把现有标签读出来、把旧的优先级标签摘掉、再整个写回去 ——
+     * 直接 PUT 一个只有新优先级的数组会把分类标签一起抹掉。
+     */
+    private void handlePriority(final Player player, String[] args) {
+        if (args.length < 3) {
+            plugin.send(player, "command.invalid-syntax", "usage", USAGE_PRIORITY);
+            return;
+        }
+        final int number = parseNumber(args[1]);
+        if (number <= 0) {
+            plugin.send(player, "command.invalid-syntax", "usage", USAGE_PRIORITY);
+            return;
+        }
+        final Priority priority = plugin.getPluginConfig().findPriority(args[2]);
+        if (priority == null) {
+            plugin.send(player, "priority.unknown", "input", args[2], "list", priorityNames());
+            return;
+        }
+        final IssueRecord record = plugin.getIssueTracker().find(number);
+        if (record == null) {
+            plugin.send(player, "priority.not-found", "number", number);
+            return;
+        }
+        if (!plugin.getGitHubApi().isAvailable()) {
+            plugin.send(player, "general.github-unavailable");
+            return;
+        }
+
+        plugin.send(player, "priority.sending", "number", number, "priority", priority.getName());
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+            @Override
+            public void run() {
+                String failure = null;
+                try {
+                    GitHubApi api = plugin.getGitHubApi();
+                    Set<String> priorityLabels = plugin.getPluginConfig().getPriorityLabels();
+                    List<String> next = new ArrayList<String>();
+                    for (String label : api.listIssueLabels(number)) {
+                        // 摘掉旧的优先级标签，其余（分类、游戏内反馈…）原样保留
+                        if (!priorityLabels.contains(label)) {
+                            next.add(label);
+                        }
+                    }
+                    if (priority.hasLabel()) {
+                        next.add(priority.getLabel());
+                    }
+                    api.setIssueLabels(number, next);
+                    plugin.getIssueTracker().markPriorityLocally(number,
+                            priority.hasLabel() ? Text.plain(priority.getName()) : "");
+                } catch (IOException e) {
+                    failure = e.getMessage();
+                }
+                final String detail = failure;
+                Bukkit.getScheduler().runTask(plugin, new Runnable() {
+                    @Override
+                    public void run() {
+                        if (!player.isOnline()) {
+                            return;
+                        }
+                        if (detail == null) {
+                            plugin.send(player, "priority.success",
+                                    "number", number, "priority", priority.getName());
+                        } else {
+                            plugin.send(player, "priority.failed", "detail", detail);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    /** 所有可选级别，用来在填错时提示。 */
+    private String priorityNames() {
+        StringBuilder builder = new StringBuilder();
+        for (Priority priority : plugin.getPluginConfig().getPriorities()) {
+            if (builder.length() > 0) {
+                builder.append('、');
+            }
+            builder.append(priority.getName()).append('(').append(priority.getId()).append(')');
+        }
+        return builder.toString();
+    }
+
+    /** 列表里那个 [高] 标记；默认档位返回空串。 */
+    private String priorityTag(IssueRecord record) {
+        if (record.priorityName == null || record.priorityName.isEmpty()) {
+            return "";
+        }
+        return plugin.getLang().text("list.priority-tag", "name", record.priorityName);
+    }
+
     private void handleStats(Player player) {
         IssueStats stats = IssueStats.compute(plugin.getIssueTracker().all(),
                 plugin.getPluginConfig().getSlaHours(), System.currentTimeMillis());
@@ -459,6 +575,11 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                     if (label != null && !label.trim().isEmpty() && !existing.contains(label.trim())) {
                         missing.add(label.trim());
                     }
+                }
+            }
+            for (String label : plugin.getPluginConfig().getPriorityLabels()) {
+                if (label != null && !label.trim().isEmpty() && !existing.contains(label.trim())) {
+                    missing.add(label.trim());
                 }
             }
             if (missing.isEmpty()) {
@@ -815,6 +936,18 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                 }
                 return result;
             }
+            if ("priority".equals(sub)) {
+                for (IssueRecord record : plugin.getIssueTracker().all()) {
+                    if (record.closed) {
+                        continue;
+                    }
+                    String number = String.valueOf(record.number);
+                    if (number.startsWith(prefix)) {
+                        result.add(number);
+                    }
+                }
+                return result;
+            }
             if ("qq".equals(sub) || "at".equals(sub)) {
                 for (Player online : Bukkit.getOnlinePlayers()) {
                     if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) {
@@ -841,6 +974,16 @@ public class IssueCommand implements CommandExecutor, TabCompleter {
                 }
                 return result;
             }
+        }
+
+        if (args.length == 3 && "priority".equalsIgnoreCase(args[0])) {
+            String prefix = args[2].toLowerCase(Locale.ROOT);
+            for (Priority priority : plugin.getPluginConfig().getPriorities()) {
+                if (priority.getId().startsWith(prefix) || priority.getName().startsWith(args[2])) {
+                    result.add(priority.getId());
+                }
+            }
+            return result;
         }
 
         return result;

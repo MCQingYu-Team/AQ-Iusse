@@ -13,6 +13,7 @@ import cn.aqcraft.iusse.AqIssuePlugin;
 import cn.aqcraft.iusse.config.Category;
 import cn.aqcraft.iusse.config.LangConfig;
 import cn.aqcraft.iusse.config.PluginConfig;
+import cn.aqcraft.iusse.config.Priority;
 
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.dialog.DialogResponseView;
@@ -55,6 +56,7 @@ public class FeedbackDialog {
     private static final String KEY_CATEGORY = "category";
     private static final String KEY_TITLE = "title";
     private static final String KEY_BODY = "body";
+    private static final String KEY_PRIORITY = "priority";
 
     /** 原版按钮的像素宽度，100 与原版「确认 / 取消」按钮一致。 */
     private static final int BUTTON_WIDTH = 100;
@@ -158,6 +160,10 @@ public class FeedbackDialog {
                 .maxLength(config.getMaxBodyLength())
                 .multiline(TextDialogInput.MultilineOptions.create(Integer.valueOf(6), Integer.valueOf(200)))
                 .build());
+        // 放在最后：一个单选比两个输入框快，安排在提交按钮上面顺手
+        inputs.add(DialogInput.singleOption(KEY_PRIORITY,
+                Component.text(lang.plain("dialog.priority-label")),
+                buildPriorityOptions(config, lang)).build());
 
         final String formTitle = preset == null
                 ? lang.plain("dialog.title")
@@ -220,7 +226,8 @@ public class FeedbackDialog {
             return;
         }
         String categoryId = fallback ? view.getText(KEY_CATEGORY) : preset.getId();
-        plugin.submitFromInput(player, categoryId, view.getText(KEY_TITLE), view.getText(KEY_BODY));
+        plugin.submitFromInput(player, categoryId, view.getText(KEY_TITLE), view.getText(KEY_BODY),
+                view.getText(KEY_PRIORITY));
     }
 
     // ------------------------------------------------------------------
@@ -253,6 +260,20 @@ public class FeedbackDialog {
                 .showDecorations(false)
                 .showTooltip(true)
                 .build();
+    }
+
+    /** 优先级下拉框的选项；默认档位由 {@code default: true} 或「无标签」决定。 */
+    private List<SingleOptionDialogInput.OptionEntry> buildPriorityOptions(PluginConfig config, LangConfig lang) {
+        List<Priority> priorities = config.getPriorities();
+        Priority defaultPriority = config.getDefaultPriority();
+        List<SingleOptionDialogInput.OptionEntry> options =
+                new ArrayList<SingleOptionDialogInput.OptionEntry>(priorities.size());
+        for (Priority priority : priorities) {
+            String display = lang.plain("dialog.priority-option", "name", priority.getName());
+            options.add(SingleOptionDialogInput.OptionEntry.create(
+                    priority.getId(), Component.text(display.trim()), priority == defaultPriority));
+        }
+        return options;
     }
 
     /** 分类下拉框的选项（只在单页式与回退模式下用得到）。 */
@@ -311,9 +332,9 @@ public class FeedbackDialog {
      * 玩家点「仍然提交」才会真正投递 —— 这一步刻意绕过重复检测，
      * 因为玩家已经看过提示并确认这不是同一个问题。
      */
-    public void openDuplicate(final Player player, final Category category, final String title,
-                              final String body, int existingNumber, String existingTitle,
-                              String existingUrl) {
+    public void openDuplicate(final Player player, final Category category, final Priority priority,
+                              final String title, final String body, int existingNumber,
+                              String existingTitle, String existingUrl) {
         final LangConfig lang = plugin.getLang();
         final String message = lang.plain("dialog.duplicate-body",
                 "number", existingNumber,
@@ -335,7 +356,7 @@ public class FeedbackDialog {
                             .action(DialogAction.customClick(
                                     (view, audience) -> {
                                         if (player.isOnline()) {
-                                            plugin.submit(player, category, title, body);
+                                            plugin.submit(player, category, priority, title, body);
                                         }
                                     },
                                     ClickCallback.Options.builder().build()))

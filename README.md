@@ -86,7 +86,8 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 | 重复检测 | 提交前先在未关闭的反馈里找相似的，命中时弹确认框，同一个问题不会被提十遍 |
 | 隐私打码 | 自动给正文里的 IP / 手机号 / 邮箱打码（可按分类单独关闭，举报内容默认不打码）；QQ 号**不打码**，因为插件本就会显示提交者的 QQ |
 | 失败重发 | 全部渠道都投递失败时存盘，之后自动重试；补发成功会通知玩家，屡次失败也会告诉他 |
-| 游戏内管理 | `/iusse list` / `close` / `stats` 让管理员不用切到浏览器就能处理反馈 |
+| 游戏内管理 | `/iusse list` / `close` / `priority` / `stats` 让管理员不用切到浏览器就能处理反馈 |
+| 优先级 | 用 GitHub 标签实现（`priority: high` 等），玩家提交时可选、管理员事后可改，Issue 列表页能按标签筛选 |
 | 一键自检 | `/iusse test` 一次看清 PAT、仓库、标签、各渠道、EasyBot 与重发队列的状态 |
 | 额度自保护 | GitHub API 剩余额度偏低时自动降低轮询频率，把额度留给玩家提交 |
 | 单语言文件 | 所有面向玩家的文案都在 `lang.yml`，改文案不用碰代码和 `config.yml` |
@@ -346,6 +347,24 @@ dialog:                      # 对话框外观
   two-step: true             # 先点分类按钮再填内容；false = 下拉框 + 表单单页式
   show-icon: true            # 正文区带一个物品图标
 
+priorities:                  # 优先级（用 GitHub 标签落地，详见下节）
+  - id: "low"
+    name: "低"
+    label: "priority: low"
+
+  - id: "normal"
+    name: "普通"
+    label: ""               # 留空 = 不加标签 = 没有优先级
+    default: true            # 表单默认选中的档位
+
+  - id: "high"
+    name: "高"
+    label: "priority: high"
+
+  - id: "urgent"
+    name: "紧急"
+    label: "priority: urgent"
+
 categories:                  # 对话框里的「反馈分类」（建议 ≤ 8 个）
   - id: "bug"
     name: "Bug 反馈"
@@ -392,6 +411,56 @@ categories:                  # 对话框里的「反馈分类」（建议 ≤ 8 
 > [!IMPORTANT]
 > `labels` 里的标签必须**已经在仓库里创建好**，否则 GitHub 会静默忽略（不报错也不自动建）。
 > 用 `/iusse test` 可以查出缺哪些。
+
+## 优先级（Priority）
+
+GitHub 的 Issue 本身**没有内建的 Priority 字段**，所以这里的优先级是用**标签**实现的：
+每个档位映射到一个标签，改优先级 = 换标签。好处是在 Issue 列表页可以直接按标签筛选，
+而且标签会显眼地显示在标题旁边。
+
+| 档位 | 标签 | 谁选 |
+| --- | --- | --- |
+| 低 | `priority: low` | 玩家可在提交时选 |
+| 普通 | *（不加标签）* | 默认档位 |
+| 高 | `priority: high` | 玩家可提交时选，管理员也可事后改 |
+| 紧急 | `priority: urgent` | 同上 |
+
+**设计取舍：**
+
+- **默认档位不加标签。** 「普通」留空 `label` 是为了让 Issue 列表保持干净 ——
+  只有真正被插队的（`priority: high` / `urgent`）才会被标出来。
+  GitHub 页面上没有标签本身也是一种信息：「这条还没被排过序」。
+- **优先级不写进 Issue 正文。** 因为管理员随时可以改优先级，写进正文的表格里
+  就会变成一条无法自动更新的陈年数据；标签才是唯一可信来源。`/iusse` 在游戏内
+  展示时会读本地记录（改优先级时会同步更新）。
+- **只有带标签的档位会在 QQ / Discord 消息里显示 `优先级：高`。** 提交「普通」时
+  消息里不会多一行噪音。
+
+**玩家怎么设：**
+
+1. 走对话框 —— 第二步表单最下面有一个「优先级」单选；
+2. 走一行式指令 —— 在内容末尾加 `!级别`：
+   `/iusse submit bug 主城卡顿|放方块时卡一下 !high`。
+
+`!` 开头是为了不和正文里碰巧出现的级别名混淆，写错了就当成正文，不会报错。
+
+**管理员怎么改：**
+
+```
+/iusse priority 12 high
+```
+
+编号支持 `#12` 写法，级别可以写 id（`high`）也可以写名字（`高`）。
+也可以用 Tab 补全。
+
+> [!WARNING]
+> GitHub 的 `PUT /issues/{n}/labels` 是**全量覆盖**，直接 PUT 一个只含新优先级的数组
+> **会把分类标签一起抹掉**。插件内部是先读出现有标签、摘掉旧的优先级标签、再整体写回，
+> 所以分类标签会原样保留。如果你手工用 API 改，也要注意这一点。
+
+> [!TIP]
+> 用 `/iusse test` 会一并检查 `priority: low` / `high` / `urgent` 是否已经在仓库里建好。
+> 没建的标签 GitHub 会静默忽略（不报错），表现就是「选了紧急但 Issue 上没标签」。
 
 ## Issue 长什么样
 
@@ -579,12 +648,13 @@ GitHub 未认证限额只有 60/小时，认证后是 5000/小时。跟踪轮询
 | 指令 | 说明 | 权限 |
 | --- | --- | --- |
 | `/iusse` | 打开反馈对话框 | `aqissue.use`（默认所有玩家） |
-| `/iusse submit <分类> <标题>\|<内容>` | 一行式提交，任何客户端都能用 | `aqissue.use` |
+| `/iusse submit <分类> <标题>\|<内容> [!级别]` | 一行式提交，任何客户端都能用；末尾 `!high` 可指定优先级 | `aqissue.use` |
 | `/iusse mine` | 查看自己提交过的反馈与处理进度 | `aqissue.use` |
 | `/iusse reply <编号> <内容>` | 往自己的反馈里补说明，直接变成 Issue 评论 | `aqissue.use` |
 | `/iusse url` | 显示仓库地址 | `aqissue.use` |
 | `/iusse list [open\|closed\|all]` | 列出反馈，等得最久的最先显示 | `aqissue.admin` |
 | `/iusse close <编号> [理由]` | 关闭 Issue（理由会作为评论发出）并通知提交者 | `aqissue.admin` |
+| `/iusse priority <编号> <级别>` | 改反馈优先级（换 GitHub 标签，分类标签会保留） | `aqissue.admin` |
 | `/iusse stats` | 提交量 / 待处理 / 超时 / 平均处理时长 / 待重发 | `aqissue.admin` |
 | `/iusse test` | 逐项自检 GitHub、标签、各渠道、EasyBot 与队列 | `aqissue.admin` |
 | `/iusse qq <玩家> [测试消息]` | 查玩家绑定的 QQ，可顺手发一条测试私信 | `aqissue.admin` |

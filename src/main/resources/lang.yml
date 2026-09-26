@@ -56,6 +56,9 @@ dialog:
   title-hint: "一句话描述问题"
   body-label: "详细内容"
   body-hint: "补充复现步骤、时间、报错信息等"
+  priority-label: "优先级"
+  # {name} 级别名。默认档位一般是「普通」，可以写成「普通（默认）」
+  priority-option: "{name}"
   icon-label: "游戏内反馈"
   confirm: "提交"
   confirm-tooltip: "发送给服务器管理员"
@@ -142,11 +145,24 @@ reply:
 # ------------------------------------------------------------
 list:
   header: "&7待处理反馈（共 {total} 条，显示 {count} 条，等得最久的排最前）："
-  line: " &e#{number} &f{title} &8({category}) &7来自 &f{player} &7已等待 &f{age} &7小时"
-  line-overdue: " &c#{number} &f{title} &8({category}) &7来自 &f{player} &7&l已等待 &f{age} &7&l小时"
-  line-closed: " &a#{number} &f{title} &8({category}) &7来自 &f{player} &8[已处理]"
+  line: " &e#{number} &f{title} &8({category}){priority} &7来自 &f{player} &7已等待 &f{age} &7小时"
+  line-overdue: " &c#{number} &f{title} &8({category}){priority} &7来自 &f{player} &7&l已等待 &f{age} &7&l小时"
+  line-closed: " &a#{number} &f{title} &8({category}){priority} &7来自 &f{player} &8[已处理]"
+  # 接在分类后面的优先级小标签；默认档位不会显示
+  priority-tag: " &c[&f{name}&c]"
   empty: "&7当前没有符合条件的反馈。"
-  hint: "&7处理：&f/iusse close <编号> [理由]"
+  hint: "&7处理：&f/iusse close <编号> [理由] &7・&f/iusse priority <编号> <级别>"
+
+# ------------------------------------------------------------
+# 管理员：调整优先级（/iusse priority）
+# ------------------------------------------------------------
+# 优先级是用 GitHub 标签实现的，改优先级 = 换标签。
+priority:
+  unknown: "&c没有这个级别：&f{input}&c。可选：&f{list}"
+  not-found: "&c本地没有编号为 &f#{number} &c的反馈记录，无法调整。"
+  sending: "&7正在把反馈 #{number} 的优先级改为 &f{priority}&7……"
+  success: "&a已把反馈 #{number} 的优先级设为 &f{priority}&a（GitHub 标签已更新）。"
+  failed: "&c修改优先级失败：{detail}"
 
 # ------------------------------------------------------------
 # 管理员：关闭反馈（/iusse close）
@@ -218,13 +234,14 @@ command:
   usage:
     - "&8&m----------------&r &bAQIssue &8&m----------------"
     - "&f/iusse &7- 打开反馈对话框"
-    - "&f/iusse submit <分类> <标题>|<内容> &7- 一行式提交"
+    - "&f/iusse submit <分类> <标题>|<内容> [!级别] &7- 一行式提交"
     - "&f/iusse mine &7- 查看我提交过的反馈"
     - "&f/iusse reply <编号> <内容> &7- 给我的反馈补充说明"
     - "&f/iusse url &7- 查看仓库地址"
     - "&7—— 以下需要管理员权限 ——"
     - "&f/iusse list [open|closed|all] &7- 列出反馈"
     - "&f/iusse close <编号> [理由] &7- 关闭反馈并通知提交者"
+    - "&f/iusse priority <编号> <级别> &7- 调整反馈优先级（GitHub 标签）"
     - "&f/iusse stats &7- 反馈统计"
     - "&f/iusse test &7- 逐项自检各个渠道"
     - "&f/iusse qq <玩家> [测试消息] &7- 查询玩家绑定的 QQ（可顺带发测试私信）"

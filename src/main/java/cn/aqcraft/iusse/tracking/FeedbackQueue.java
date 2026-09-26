@@ -104,7 +104,7 @@ public class FeedbackQueue {
      * @return true 表示已入队；队列功能关闭或已满时返回 false
      */
     public boolean enqueue(String playerUuid, String playerName, String categoryId, String categoryName,
-                           String title, String body) {
+                           String priorityId, String title, String body) {
         if (!plugin.getPluginConfig().isRetryQueueEnabled()) {
             return false;
         }
@@ -114,7 +114,7 @@ public class FeedbackQueue {
             return false;
         }
         items.add(new QueuedFeedback(UUID.randomUUID().toString(), playerUuid, playerName,
-                categoryId, categoryName, title, body, System.currentTimeMillis()));
+                categoryId, categoryName, priorityId, title, body, System.currentTimeMillis()));
         save();
         plugin.getLogger().info("反馈投递失败，已存入重发队列：" + playerName + " / " + title
                 + "（队列共 " + items.size() + " 条）");
@@ -177,7 +177,8 @@ public class FeedbackQueue {
                 item.attempts++;
 
                 Submission submission = plugin.buildSubmission(item.playerName, item.playerUuid,
-                        category, item.title, item.body);
+                        category, plugin.getPluginConfig().findPriority(item.priorityId),
+                        item.title, item.body);
                 List<ChannelResult> results = plugin.getChannelManager().submitAllSync(submission);
 
                 boolean anySuccess = false;

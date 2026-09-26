@@ -4,9 +4,11 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -108,6 +110,9 @@ public class PluginConfig {
     // 分类
     private List<Category> categories;
 
+    // 优先级档位
+    private List<Priority> priorities;
+
     // 对话框外观
     private boolean twoStepDialog;
     private boolean dialogShowIcon;
@@ -206,12 +211,33 @@ public class PluginConfig {
         rateLimitThreshold = Math.max(0, config.getInt("tracking.rate-limit-threshold", 100));
 
         categories = readCategories(config);
+        priorities = readPriorities(config);
 
         twoStepDialog = config.getBoolean("dialog.two-step", true);
         dialogShowIcon = config.getBoolean("dialog.show-icon", true);
 
         showServerInChannels = config.getBoolean("message.show-server", false);
         showTimeInChannels = config.getBoolean("message.show-time", false);
+    }
+
+    /**
+     * 读优先级档位。
+     * <p>
+     * 没配时给一套默认档位而不是直接报错 —— 优先级是可选功能，
+     * 老配置升级上来不该因为缺这一段就整个插件不可用。
+     */
+    private List<Priority> readPriorities(FileConfiguration config) {
+        List<Priority> parsed = Priority.parse(config.getMapList("priorities"));
+        if (!parsed.isEmpty()) {
+            return Collections.unmodifiableList(parsed);
+        }
+        plugin.getLogger().warning("config.yml 中未配置优先级档位（priorities），将使用内置默认档位。");
+        List<Priority> fallback = new ArrayList<Priority>(4);
+        fallback.add(new Priority("low", "低", "priority: low", false));
+        fallback.add(new Priority("normal", "普通", "", true));
+        fallback.add(new Priority("high", "高", "priority: high", false));
+        fallback.add(new Priority("urgent", "紧急", "priority: urgent", false));
+        return Collections.unmodifiableList(fallback);
     }
 
     private List<Category> readCategories(FileConfiguration config) {
@@ -406,6 +432,64 @@ public class PluginConfig {
 
     public List<Category> getCategories() {
         return categories;
+    }
+
+    // ------------------------------------------------------------------
+    // 优先级
+    // ------------------------------------------------------------------
+
+    /** 全部优先级档位（按配置顺序，也就是表单下拉框里的顺序）。 */
+    public List<Priority> getPriorities() {
+        return priorities;
+    }
+
+    /**
+     * 表单里默认选中的档位。
+     * <p>
+     * 优先取配了 {@code default: true} 的；没人标就挑一个不加标签的
+     * （「普通」这种，语义上等于没设优先级）；再不行才用第一个。
+     */
+    public Priority getDefaultPriority() {
+        for (Priority priority : priorities) {
+            if (priority.isDefault()) {
+                return priority;
+            }
+        }
+        for (Priority priority : priorities) {
+            if (!priority.hasLabel()) {
+                return priority;
+            }
+        }
+        return priorities.get(0);
+    }
+
+    /** 按 id 或显示名找档位，找不到返回 {@code null}。 */
+    public Priority findPriority(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        for (Priority priority : priorities) {
+            if (priority.matches(raw)) {
+                return priority;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 所有非空的优先级标签。
+     * <p>
+     * 改一条 Issue 的优先级之前，要用它把旧的那个摘掉 ——
+     * GitHub 的 {@code PUT .../labels} 是全量覆盖，得先知道哪些是「优先级标签」。
+     */
+    public Set<String> getPriorityLabels() {
+        Set<String> labels = new LinkedHashSet<String>();
+        for (Priority priority : priorities) {
+            if (priority.hasLabel()) {
+                labels.add(priority.getLabel());
+            }
+        }
+        return labels;
     }
 
     // ------------------------------------------------------------------

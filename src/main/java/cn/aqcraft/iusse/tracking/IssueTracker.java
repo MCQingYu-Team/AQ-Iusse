@@ -108,7 +108,7 @@ public class IssueTracker {
 
     /** 登记一条刚创建成功的 Issue。 */
     public void track(int number, String url, String playerUuid, String playerName,
-                      String title, String categoryName) {
+                      String title, String categoryName, String priorityName) {
         if (number <= 0) {
             return;
         }
@@ -117,8 +117,12 @@ public class IssueTracker {
                 return;
             }
         }
-        records.add(new IssueRecord(number, url, playerName, playerUuid, title, categoryName,
-                System.currentTimeMillis()));
+        IssueRecord record = new IssueRecord(number, url, playerName, playerUuid, title, categoryName,
+                System.currentTimeMillis());
+        if (priorityName != null) {
+            record.priorityName = priorityName;
+        }
+        records.add(record);
         save();
     }
 
@@ -418,6 +422,16 @@ public class IssueTracker {
             return;
         }
         record.commentCount++;
+        save();
+    }
+
+    /** 管理员在游戏内改了优先级：同步到本地记录，供 /iusse list 展示。 */
+    public void markPriorityLocally(int number, String priorityName) {
+        IssueRecord record = find(number);
+        if (record == null) {
+            return;
+        }
+        record.priorityName = priorityName == null ? "" : priorityName;
         save();
     }
 

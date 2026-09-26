@@ -47,6 +47,14 @@ public class Submission {
     private boolean showServerInChannels = true;
     private boolean showTimeInChannels = true;
 
+    /**
+     * 优先级显示名（如「紧急」）；{@code null} 表示默认档位、无需提及。
+     * <p>
+     * 由调用方在默认档位时传 {@code null}，于是「各渠道显不显示优先级」这一判断
+     * 就收敛成「字段是否为空」，不用再往下传一个 isDefault 布尔值。
+     */
+    private String priorityName;
+
     public Submission(String playerName, String playerUuid, String categoryId, String categoryName,
                       List<String> labels, String title, String body, String serverInfo, Date time,
                       String fallbackLink) {
@@ -90,6 +98,21 @@ public class Submission {
     public void setChannelExtras(boolean showServer, boolean showTime) {
         this.showServerInChannels = showServer;
         this.showTimeInChannels = showTime;
+    }
+
+    /**
+     * 设置优先级显示名。
+     * <p>
+     * 只在渠道消息（QQ / Discord）里显示 —— GitHub Issue 那边靠标签就已经看得到了。
+     * 默认档位请传 {@code null}，这样消息里不会多出一行「优先级：普通」。
+     */
+    public void setPriorityName(String priorityName) {
+        this.priorityName = priorityName == null || priorityName.isEmpty() ? null : priorityName;
+    }
+
+    /** 优先级显示名；{@code null} 表示默认档位（没设优先级）。 */
+    public String getPriorityName() {
+        return priorityName;
     }
 
     public String getCategoryId() {
@@ -273,6 +296,9 @@ public class Submission {
             builder.append("QQ：").append(playerQq).append('\n');
         }
         builder.append("分类：").append(categoryName).append('\n');
+        if (priorityName != null) {
+            builder.append("优先级：").append(priorityName).append('\n');
+        }
         if (showServerInChannels && serverInfo != null && !serverInfo.isEmpty()) {
             builder.append("服务端：").append(serverInfo).append('\n');
         }

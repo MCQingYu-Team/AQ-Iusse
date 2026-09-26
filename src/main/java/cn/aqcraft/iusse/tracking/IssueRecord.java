@@ -20,6 +20,8 @@ public class IssueRecord {
     public final String playerUuid;
     public final String title;
     public final String categoryName;
+    /** 优先级显示名；空串表示默认档位（没设优先级）。 */
+    public String priorityName = "";
     /** 提交时间戳。 */
     public final long submittedAt;
 
@@ -53,6 +55,7 @@ public class IssueRecord {
         map.put("player-uuid", playerUuid);
         map.put("title", title);
         map.put("category", categoryName);
+        map.put("priority", priorityName);
         map.put("submitted-at", submittedAt);
         map.put("comment-count", commentCount);
         map.put("closed", closed);
@@ -81,6 +84,8 @@ public class IssueRecord {
                 MiniJson.string(map, "category"),
                 MiniJson.longValue(map, "submitted-at", 0L));
         record.commentCount = MiniJson.integer(map, "comment-count", 0);
+        String priority = MiniJson.string(map, "priority");
+        record.priorityName = priority == null ? "" : priority;
         record.closed = Boolean.TRUE.equals(map.get("closed"));
         record.closeNotified = Boolean.TRUE.equals(map.get("close-notified"));
         record.closedAt = MiniJson.longValue(map, "closed-at", 0L);

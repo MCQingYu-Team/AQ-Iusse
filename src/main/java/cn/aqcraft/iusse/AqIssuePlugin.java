@@ -22,6 +22,7 @@ import cn.aqcraft.iusse.command.IssueCommand;
 import cn.aqcraft.iusse.config.Category;
 import cn.aqcraft.iusse.config.LangConfig;
 import cn.aqcraft.iusse.config.PluginConfig;
+import cn.aqcraft.iusse.config.Priority;
 import cn.aqcraft.iusse.dialog.FeedbackDialog;
 import cn.aqcraft.iusse.github.GitHubApi;
 import cn.aqcraft.iusse.listener.PlayerJoinListener;
@@ -183,9 +184,11 @@ public class AqIssuePlugin extends JavaPlugin {
     /**
      * 校验来自对话框或指令的输入，通过后开始投递。
      *
+     * @param priorityRaw 优先级（id 或显示名）；认不出就用默认档位
      * @return true 表示校验通过并已开始投递
      */
-    public boolean submitFromInput(Player player, String categoryId, String title, String body) {
+    public boolean submitFromInput(Player player, String categoryId, String title, String body,
+                                   String priorityRaw) {
         Category category = pluginConfig.findCategory(categoryId);
         if (category == null) {
             send(player, "general.unknown-category", "id", categoryId);
@@ -238,7 +241,22 @@ public class AqIssuePlugin extends JavaPlugin {
             send(player, "submit.mask-notice");
         }
 
-        return submitValidated(player, category, safeTitle.getText(), safeBody.getText());
+        return submitValidated(player, category, resolvePriority(priorityRaw),
+                safeTitle.getText(), safeBody.getText());
+    }
+
+    /**
+     * 把玩家选的优先级解析成档位。
+     * <p>
+     * 认不出来（未选择、拼错、或旧版本客户端没传这个字段）就用默认档位 ——
+     * 优先级是可选项，不该因为它而拦下整个提交。
+     */
+    private Priority resolvePriority(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return pluginConfig.getDefaultPriority();
+        }
+        Priority priority = pluginConfig.findPriority(raw);
+        return priority == null ? pluginConfig.getDefaultPriority() : priority;
     }
 
     /**
@@ -250,9 +268,9 @@ public class AqIssuePlugin extends JavaPlugin {
      * @return 恒为 true（校验已通过，后续是异步流程）
      */
     private boolean submitValidated(final Player player, final Category category,
-                                    final String title, final String body) {
+                                    final Priority priority, final String title, final String body) {
         if (!pluginConfig.isDuplicateCheck() || !gitHubApi.isAvailable()) {
-            submit(player, category, title, body);
+            submit(player, category, priority, title, body);
             return true;
         }
 
@@ -270,12 +288,12 @@ public class AqIssuePlugin extends JavaPlugin {
                             return;
                         }
                         if (similar == null) {
-                            submit(online, category, title, body);
+                            submit(online, category, priority, title, body);
                             return;
                         }
                         send(online, "submit.duplicate-found",
                                 "number", similar.number, "title", similar.title);
-                        feedbackDialog.openDuplicate(online, category, title, body,
+                        feedbackDialog.openDuplicate(online, category, priority, title, body,
                                 similar.number, similar.title, similar.url);
                     }
                 });
@@ -400,7 +418,8 @@ public class AqIssuePlugin extends JavaPlugin {
      * @param title 不含标题前缀的纯标题
      */
     public Submission buildSubmission(String playerName, String playerUuid, Category category,
-                                      String title, String body) {
+                                      Priority priority, String title, String body) {
+        Priority effective = priority == null ? pluginConfig.getDefaultPriority() : priority;
         boolean withPlayer = pluginConfig.isIncludePlayerInfo();
         String fallbackLink = pluginConfig.isGitHubEnabled() && pluginConfig.isRepoConfigured()
                 ? pluginConfig.getRepoUrl() : null;
@@ -409,7 +428,7 @@ public class AqIssuePlugin extends JavaPlugin {
                 withPlayer ? playerUuid : null,
                 category.getId(),
                 Text.plain(category.getName()),
-                collectLabels(category),
+                collectLabels(category, effective),
                 Text.oneLine(pluginConfig.getTitlePrefix() + title),
                 body,
                 pluginConfig.isIncludeServerInfo() ? Bukkit.getName() + " " + Bukkit.getVersion() : null,
@@ -418,26 +437,30 @@ public class AqIssuePlugin extends JavaPlugin {
         // 渠道消息是「通知」，默认只留必要信息；完整记录在 GitHub Issue 里
         submission.setChannelExtras(pluginConfig.isShowServerInChannels(),
                 pluginConfig.isShowTimeInChannels());
+        // 只有「带标签」的档位才值得在渠道消息里提一句 ——
+        // 没有标签的（「普通」）语义上就是没设优先级
+        submission.setPriorityName(effective.hasLabel() ? Text.plain(effective.getName()) : null);
         return submission;
     }
 
     /** 把反馈异步投递到所有已启用的渠道。 */
-    public void submit(final Player player, final Category category, final String title, final String body) {
+    public void submit(final Player player, final Category category, final Priority priority,
+                       final String title, final String body) {
         send(player, "submit.submitting");
 
         final Submission submission = buildSubmission(player.getName(), player.getUniqueId().toString(),
-                category, title, body);
+                category, priority, title, body);
         final UUID playerId = player.getUniqueId();
         final String playerName = player.getName();
         channelManager.submitAll(submission, new java.util.function.Consumer<List<ChannelResult>>() {
             @Override
             public void accept(List<ChannelResult> results) {
-                handleResults(playerId, playerName, category, submission, results);
+                handleResults(playerId, playerName, category, priority, submission, results);
             }
         });
     }
 
-    private void handleResults(UUID playerId, String playerName, Category category,
+    private void handleResults(UUID playerId, String playerName, Category category, Priority priority,
                                Submission submission, List<ChannelResult> results) {
         boolean anySuccess = false;
         boolean queued = false;
@@ -460,6 +483,7 @@ public class AqIssuePlugin extends JavaPlugin {
             // 全部失败多半是网络抖动，存起来等下一轮自动重试
             queued = feedbackQueue.enqueue(playerId.toString(), playerName,
                     category.getId(), submission.getCategoryName(),
+                    priority == null ? "" : priority.getId(),
                     stripTitlePrefix(submission.getTitle()), submission.getBody());
         }
         getLogger().info("玩家 " + playerName + "，分类 " + category.getId() + " -> " + log);
@@ -498,7 +522,8 @@ public class AqIssuePlugin extends JavaPlugin {
             if (number > 0) {
                 issueTracker.track(number, link,
                         submission.getPlayerUuid(), submission.getPlayerName(),
-                        submission.getTitle(), submission.getCategoryName());
+                        submission.getTitle(), submission.getCategoryName(),
+                        submission.getPriorityName());
             }
         }
     }
@@ -519,7 +544,7 @@ public class AqIssuePlugin extends JavaPlugin {
         }
     }
 
-    private List<String> collectLabels(Category category) {
+    private List<String> collectLabels(Category category, Priority priority) {
         Set<String> merged = new LinkedHashSet<String>();
         for (String label : pluginConfig.getLabels()) {
             if (label != null && !label.trim().isEmpty()) {
@@ -530,6 +555,9 @@ public class AqIssuePlugin extends JavaPlugin {
             if (label != null && !label.trim().isEmpty()) {
                 merged.add(label.trim());
             }
+        }
+        if (priority != null && priority.hasLabel()) {
+            merged.add(priority.getLabel());
         }
         return new ArrayList<String>(merged);
     }

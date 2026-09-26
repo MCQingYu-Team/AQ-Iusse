@@ -19,6 +19,8 @@ public class QueuedFeedback {
     public final String playerName;
     public final String categoryId;
     public final String categoryName;
+    /** 优先级 id；空串表示用默认档位。 */
+    public final String priorityId;
     public final String title;
     public final String body;
     /** 入队时间。 */
@@ -28,12 +30,13 @@ public class QueuedFeedback {
     public int attempts;
 
     public QueuedFeedback(String id, String playerUuid, String playerName, String categoryId,
-                          String categoryName, String title, String body, long createdAt) {
+                          String categoryName, String priorityId, String title, String body, long createdAt) {
         this.id = id;
         this.playerUuid = playerUuid == null ? "" : playerUuid;
         this.playerName = playerName == null ? "" : playerName;
         this.categoryId = categoryId == null ? "" : categoryId;
         this.categoryName = categoryName == null ? "" : categoryName;
+        this.priorityId = priorityId == null ? "" : priorityId;
         this.title = title == null ? "" : title;
         this.body = body == null ? "" : body;
         this.createdAt = createdAt;
@@ -46,6 +49,7 @@ public class QueuedFeedback {
         map.put("player-name", playerName);
         map.put("category-id", categoryId);
         map.put("category", categoryName);
+        map.put("priority-id", priorityId);
         map.put("title", title);
         map.put("body", body);
         map.put("created-at", createdAt);
@@ -71,6 +75,7 @@ public class QueuedFeedback {
                 MiniJson.string(map, "player-name"),
                 categoryId,
                 MiniJson.string(map, "category"),
+                MiniJson.string(map, "priority-id"),
                 title,
                 MiniJson.string(map, "body"),
                 MiniJson.longValue(map, "created-at", System.currentTimeMillis()));

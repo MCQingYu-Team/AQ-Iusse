@@ -109,6 +109,23 @@ public class GitHubApi {
         return toSummary(object(request("GET", "/repos/" + repoPath() + "/issues/" + number, null)));
     }
 
+    /** 读一条 Issue 现有的标签名。 */
+    public List<String> listIssueLabels(int number) throws IOException {
+        return parseLabels(object(request("GET", "/repos/" + repoPath() + "/issues/" + number, null)));
+    }
+
+    /**
+     * 整体替换一条 Issue 的标签。
+     * <p>
+     * GitHub 这个接口是<b>全量覆盖</b>而不是追加，所以调用方必须先把现有标签读出来、
+     * 改完再整个写回去 —— 否则会把分类标签也一并抹掉。
+     */
+    public void setIssueLabels(int number, List<String> labels) throws IOException {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("labels", labels == null ? Collections.emptyList() : labels);
+        request("PUT", "/repos/" + repoPath() + "/issues/" + number + "/labels", MiniJson.write(payload));
+    }
+
     /**
      * 列出最近的 Issue（重复检测用）。
      *
@@ -287,6 +304,28 @@ public class GitHubApi {
         String url = MiniJson.string(json, "html_url");
         return new IssueSummary(number, MiniJson.string(json, "title"), url,
                 MiniJson.string(json, "state"), MiniJson.integer(json, "comments", 0));
+    }
+
+    /** 从 Issue JSON 里取出标签名；标签既可能是对象数组，也可能是字符串数组。 */
+    private static List<String> parseLabels(Map<String, Object> issueJson) {
+        Object raw = issueJson.get("labels");
+        if (!(raw instanceof List)) {
+            return Collections.emptyList();
+        }
+        List<String> names = new ArrayList<String>();
+        for (Object element : (List<?>) raw) {
+            if (element instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> map = (Map<String, Object>) element;
+                String name = MiniJson.string(map, "name");
+                if (name != null && !name.isEmpty()) {
+                    names.add(name);
+                }
+            } else if (element != null && !String.valueOf(element).isEmpty()) {
+                names.add(String.valueOf(element));
+            }
+        }
+        return names;
     }
 
     private static Map<String, Object> object(Http.Response response) throws IOException {
