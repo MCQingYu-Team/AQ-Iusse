@@ -60,7 +60,7 @@ public class FeedbackDialog {
     private static final int BUTTON_WIDTH = 100;
 
     /** 分类按钮超过这个数量就不再用网格，改用下拉框，免得挤成一团。 */
-    private static final int MAX_PICKER_BUTTONS = 6;
+    private static final int MAX_PICKER_BUTTONS = 8;
 
     /** 原版多按钮网格最多三列。 */
     private static final int MAX_COLUMNS = 3;
@@ -125,12 +125,9 @@ public class FeedbackDialog {
         player.showDialog(dialog);
     }
 
-    /** 分类按钮列数：少的时候排成一行，多的时候两列或三列，看起来更整齐。 */
+    /** 分类按钮列数：≤3 个排成一行，再多就固定两列。 */
     private static int columnsFor(int count) {
-        if (count <= MAX_COLUMNS) {
-            return Math.max(1, count);
-        }
-        return count == 4 ? 2 : MAX_COLUMNS;
+        return count <= MAX_COLUMNS ? Math.max(1, count) : 2;
     }
 
     // ------------------------------------------------------------------

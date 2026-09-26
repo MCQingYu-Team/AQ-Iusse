@@ -31,6 +31,8 @@ public class PluginConfig {
     private String titlePrefix;
     private boolean includePlayerInfo;
     private boolean includeServerInfo;
+    /** Issue 正文是否用表格 / 折叠块这类富文本排版。 */
+    private boolean richIssueBody;
     private int timeoutMillis;
     private boolean proxyEnabled;
     private String proxyHost;
@@ -127,6 +129,7 @@ public class PluginConfig {
         titlePrefix = config.getString("github.title-prefix", "");
         includePlayerInfo = config.getBoolean("github.include-player-info", true);
         includeServerInfo = config.getBoolean("github.include-server-info", true);
+        richIssueBody = config.getBoolean("github.rich-body", true);
         timeoutMillis = Math.max(1000, config.getInt("github.timeout-millis", 10000));
         proxyEnabled = config.getBoolean("github.proxy.enabled", false);
         proxyHost = config.getString("github.proxy.host", "127.0.0.1");
@@ -291,6 +294,11 @@ public class PluginConfig {
 
     public boolean isIncludeServerInfo() {
         return includeServerInfo;
+    }
+
+    /** Issue 正文是否用表格 / 折叠块这类富文本排版（false 则用简单的项目符号列表）。 */
+    public boolean isRichIssueBody() {
+        return richIssueBody;
     }
 
     public int getTimeoutMillis() {

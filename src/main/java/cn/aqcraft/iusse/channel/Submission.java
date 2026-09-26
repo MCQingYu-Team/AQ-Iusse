@@ -116,9 +116,60 @@ public class Submission {
         return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(time);
     }
 
-    /** GitHub Issue 用的 Markdown 正文。 */
+    /** GitHub Issue 用的 Markdown 正文（富文本排版）。 */
     public String toMarkdown() {
-        StringBuilder builder = new StringBuilder();
+        return toMarkdown(true);
+    }
+
+    /**
+     * GitHub Issue 用的 Markdown 正文。
+     * <p>
+     * 富文本版刻意做成「维护者一眼能扫完」的样子：
+     * 顶上一句提示告诉他可以直接在 Issue 里回复（玩家会收到通知），
+     * 中间一张信息表，正文单独成段，技术细节收进折叠块 ——
+     * 因为排查时真正要读的只有正文，UUID 与服务端版本属于「需要时才展开」。
+     *
+     * @param rich true 用表格 / 折叠块；false 退化成简单的项目符号列表
+     */
+    public String toMarkdown(boolean rich) {
+        return rich ? richMarkdown() : plainMarkdown();
+    }
+
+    private String richMarkdown() {
+        StringBuilder builder = new StringBuilder(512);
+
+        builder.append("> [!NOTE]\n")
+                .append("> 本条反馈由服务器内 `/iusse` 提交。**直接在本 Issue 下回复即可**，")
+                .append("提交的玩家会收到通知。\n\n");
+
+        builder.append("## 反馈信息\n\n");
+        builder.append("| 项目 | 内容 |\n| --- | --- |\n");
+        if (playerName != null && !playerName.isEmpty()) {
+            builder.append("| 提交玩家 | **").append(cell(playerName)).append("** |\n");
+        }
+        builder.append("| 反馈分类 | ").append(cell(categoryName))
+                .append(" `").append(cell(categoryId)).append("` |\n");
+        builder.append("| 提交时间 | ").append(getFormattedTime()).append(" |\n\n");
+
+        builder.append("## 详细内容\n\n");
+        builder.append(body == null ? "" : body);
+        builder.append("\n\n---\n\n");
+
+        builder.append("<details>\n<summary>技术信息（排查时用得上）</summary>\n\n");
+        if (serverInfo != null && !serverInfo.isEmpty()) {
+            builder.append("- 服务端：`").append(serverInfo).append("`\n");
+        }
+        if (playerUuid != null && !playerUuid.isEmpty()) {
+            builder.append("- 玩家 UUID：`").append(playerUuid).append("`\n");
+        }
+        builder.append("- 来源：服务器内 `/iusse`\n");
+        builder.append("\n</details>\n");
+
+        return builder.toString();
+    }
+
+    private String plainMarkdown() {
+        StringBuilder builder = new StringBuilder(256);
         if (playerName != null) {
             builder.append("- **提交玩家**：").append(playerName);
             if (playerUuid != null && !playerUuid.isEmpty()) {
@@ -134,6 +185,11 @@ public class Submission {
         builder.append("- **提交时间**：").append(getFormattedTime()).append("\n\n---\n\n");
         builder.append(body == null ? "" : body);
         return builder.toString();
+    }
+
+    /** Markdown 表格单元格里的竖线会把列切断，转义掉。 */
+    private static String cell(String raw) {
+        return raw == null ? "" : raw.replace("|", "\\|").replace("\n", " ");
     }
 
     /** Discord / QQ 用的纯文本正文，末尾会带上已知链接。 */

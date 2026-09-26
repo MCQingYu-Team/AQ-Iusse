@@ -73,7 +73,8 @@ public class GitHubChannel implements Channel {
     @Override
     public ChannelResult submit(Submission submission) throws IOException {
         Map<String, Object> json = api.createIssue(
-                submission.getTitle(), submission.toMarkdown(), submission.getLabels());
+                submission.getTitle(), submission.toMarkdown(config.isRichIssueBody()),
+                submission.getLabels());
 
         int number = MiniJson.integer(json, "number", 0);
         String issueUrl = MiniJson.string(json, "html_url");

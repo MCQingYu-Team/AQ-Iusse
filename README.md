@@ -21,7 +21,7 @@
 两个页面都可以按 Esc 关闭，第二步的「返回」能回到上一步改分类。
 
 > [!NOTE]
-> 分类超过 6 个时按钮会挤成一团，插件会自动退回「下拉框 + 表单」的单页式。
+> 分类超过 8 个时按钮会挤成一团，插件会自动退回「下拉框 + 表单」的单页式。
 > 也可以在配置里用 `dialog.two-step: false` 强制单页式。
 
 投递完成后玩家会看到每个渠道各自的结果：
@@ -293,6 +293,7 @@ github:                      # 仓库信息与 Issue 模板
   title-prefix: "[游戏内] "
   include-player-info: true
   include-server-info: true
+  rich-body: true            # Issue 正文用表格 / 折叠块排版
   timeout-millis: 10000
   retry: 2                   # 网络异常 / 429 / 5xx 时的重试次数
   proxy:                     # 国内服务器连不上 api.github.com / discord.com 时启用
@@ -331,18 +332,91 @@ dialog:                      # 对话框外观
   two-step: true             # 先点分类按钮再填内容；false = 下拉框 + 表单单页式
   show-icon: true            # 正文区带一个物品图标
 
-categories:                  # 对话框里的「反馈分类」下拉项
+categories:                  # 对话框里的「反馈分类」（建议 ≤ 8 个）
   - id: "bug"
     name: "Bug 反馈"
-    description: "报错、闪退、功能异常、卡顿"
+    description: "报错、闪退、功能异常"
     labels: ["bug"]          # 该分类额外附加的 GitHub 标签
+
+  - id: "crash"
+    name: "崩溃卡死"
+    description: "服务端或客户端崩溃、卡死不动"
+    labels: ["bug", "crash"]
+
+  - id: "lag"
+    name: "卡顿掉帧"
+    description: "TPS 低、延迟高、画面卡"
+    labels: ["performance"]
+
+  - id: "feature"
+    name: "功能建议"
+    description: "希望服务器新增或优化的内容"
+    labels: ["enhancement"]
 
   - id: "report"
     name: "举报投诉"
     description: "违规行为、玩家纠纷、管理投诉"
     labels: ["report"]
     mask: false              # 举报内容里的 QQ 号是必要证据，不打码
+
+  - id: "appeal"
+    name: "封禁申诉"
+    description: "对处罚有异议，申请复核"
+    labels: ["appeal"]
+
+  - id: "account"
+    name: "账号问题"
+    description: "登录、绑定、改名、数据丢失"
+    labels: ["account"]
+
+  - id: "other"
+    name: "其它问题"
+    description: "不属于以上分类的内容"
+    labels: ["question"]
 ```
+
+> [!IMPORTANT]
+> `labels` 里的标签必须**已经在仓库里创建好**，否则 GitHub 会静默忽略（不报错也不自动建）。
+> 用 `/iusse test` 可以查出缺哪些。
+
+## Issue 长什么样
+
+`github.rich-body: true`（默认）时，一条反馈会变成这样：
+
+> [!NOTE]
+> 本条反馈由服务器内 `/iusse` 提交。**直接在本 Issue 下回复即可**，提交的玩家会收到通知。
+
+**反馈信息**
+
+| 项目 | 内容 |
+| --- | --- |
+| 提交玩家 | **xcbro** |
+| 反馈分类 | Bug 反馈 `bug` |
+| 提交时间 | 2026-09-26 22:15:03 |
+
+**详细内容**
+
+在主城放方块的时候会卡一下，大概持续两秒。
+
+---
+
+<details>
+<summary>技术信息（排查时用得上）</summary>
+
+- 服务端：`Leaf 26.2.build.64-alpha`
+- 玩家 UUID：`7c9b1f42-...`
+- 来源：服务器内 `/iusse`
+
+</details>
+
+几个刻意的选择：
+
+- **顶上那句提示**告诉维护者「直接回复就行了，玩家会收到通知」—— 否则他们会另跑去 QQ 群里回
+- **技术信息收进折叠块**：排查时真正要读的只有正文，UUID 与服务端版本属于「需要时才展开」
+- **表里不写玩家 QQ**：Issue 通常是公开仓库，QQ 号写进去等于公开玩家隐私。
+  QQ 号只出现在 QQ 群消息里（那是内部频道）
+
+想回到早期那种项目符号列表就设 `github.rich-body: false`。
 
 ## 反馈管理与运维
 

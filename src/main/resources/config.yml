@@ -35,6 +35,11 @@ github:
   include-player-info: true
   include-server-info: true
 
+  # Issue 正文用富文本排版：顶部一句提示、一张信息表、正文单独成段、
+  # 技术信息（UUID / 服务端版本）收进折叠块
+  # false 则退化成简单的项目符号列表
+  rich-body: true
+
   # 网络超时（毫秒）
   timeout-millis: 10000
 
@@ -186,7 +191,7 @@ dialog:
   # true：两步式 —— 先点分类按钮（鼠标悬停有说明），再填标题与内容，
   #       可点「返回」改分类；比一个下拉框塞满所有东西更好看也好用
   # false：单页式 —— 下拉框 + 标题 + 正文
-  # 分类超过 6 个时会自动退回单页式，免得按钮挤成一团
+  # 分类超过 8 个时会自动退回单页式，免得按钮挤成一团
   two-step: true
 
   # 对话框正文区是否带一个物品图标（书与笔）
@@ -200,12 +205,24 @@ dialog:
 # description 一句话说明，会拼在名字后面展示
 # labels      该分类额外附加的 GitHub 标签（同样需要仓库里已存在）
 # mask        该分类是否参与隐私打码，默认 true；举报投诉要保留 QQ 号，所以关掉
-# 注意：labels 里的标签必须已经在仓库里创建好，否则 GitHub 会静默忽略
+# 建议不超过 8 个：对话框第一页每个分类占一个按钮，超过 8 个会退回下拉框式
+# 注意：labels 里的标签必须已经在仓库里创建好，否则 GitHub 会静默忽略（不会报错）
+#       用 /iusse test 可以查出仓库里缺哪些标签
 categories:
   - id: "bug"
     name: "Bug 反馈"
-    description: "报错、闪退、功能异常、卡顿"
+    description: "报错、闪退、功能异常"
     labels: ["bug"]
+
+  - id: "crash"
+    name: "崩溃卡死"
+    description: "服务端或客户端崩溃、卡死不动"
+    labels: ["bug", "crash"]
+
+  - id: "lag"
+    name: "卡顿掉帧"
+    description: "TPS 低、延迟高、画面卡"
+    labels: ["performance"]
 
   - id: "feature"
     name: "功能建议"
@@ -218,6 +235,16 @@ categories:
     labels: ["report"]
     # 举报内容里的 QQ 号是必要证据，不打码
     mask: false
+
+  - id: "appeal"
+    name: "封禁申诉"
+    description: "对处罚有异议，申请复核"
+    labels: ["appeal"]
+
+  - id: "account"
+    name: "账号问题"
+    description: "登录、绑定、改名、数据丢失"
+    labels: ["account"]
 
   - id: "other"
     name: "其它问题"
