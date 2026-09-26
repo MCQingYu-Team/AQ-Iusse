@@ -34,6 +34,20 @@ general:
 # ------------------------------------------------------------
 # 对话框里的文字以原版界面样式渲染，这里写纯文本，不需要颜色代码。
 dialog:
+  # ---- 第一步：选分类（两步式） ----
+  picker-title: "提交反馈"
+  picker-body: "选择要提交的反馈类型。"
+  picker-hint: "写清楚「什么时间、在哪个世界、做了什么、报了什么错」，处理起来会快很多。"
+  # 鼠标悬停在分类按钮上显示
+  category-tooltip: "{name}　{description}"
+  picker-cancel: "取消"
+  picker-cancel-tooltip: "关闭窗口，什么都不提交"
+
+  # ---- 第二步：填内容（两步式） ----
+  # {name} 分类名
+  form-title: "{name}"
+  form-body: "{name}　{description}"
+  # ---- 单页式（dialog.two-step: false）用这两条 ----
   title: "提交反馈"
   body: "选择反馈分类，填写标题与内容，点击「提交」即可送达服务器管理员。"
   category-label: "反馈分类"
@@ -42,8 +56,11 @@ dialog:
   title-hint: "一句话描述问题"
   body-label: "详细内容"
   body-hint: "补充复现步骤、时间、报错信息等"
+  icon-label: "游戏内反馈"
   confirm: "提交"
   confirm-tooltip: "发送给服务器管理员"
+  back: "返回"
+  back-tooltip: "回到上一步重新选择分类"
   cancel: "取消"
   cancel-tooltip: "放弃本次提交"
   unsupported: "&c当前服务端不支持对话框功能，请用 &f/iusse submit <分类> <标题>|<内容> &c提交。"

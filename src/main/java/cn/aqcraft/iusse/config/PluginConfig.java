@@ -104,6 +104,10 @@ public class PluginConfig {
     // 分类
     private List<Category> categories;
 
+    // 对话框外观
+    private boolean twoStepDialog;
+    private boolean dialogShowIcon;
+
     public PluginConfig(AqIssuePlugin plugin) {
         this.plugin = plugin;
         load();
@@ -192,6 +196,9 @@ public class PluginConfig {
         rateLimitThreshold = Math.max(0, config.getInt("tracking.rate-limit-threshold", 100));
 
         categories = readCategories(config);
+
+        twoStepDialog = config.getBoolean("dialog.two-step", true);
+        dialogShowIcon = config.getBoolean("dialog.show-icon", true);
     }
 
     private List<Category> readCategories(FileConfiguration config) {
@@ -376,6 +383,20 @@ public class PluginConfig {
 
     public List<Category> getCategories() {
         return categories;
+    }
+
+    // ------------------------------------------------------------------
+    // 对话框外观
+    // ------------------------------------------------------------------
+
+    /** true：先点分类按钮再填内容（两步式）；false：下拉框 + 表单的单页式。 */
+    public boolean isTwoStepDialog() {
+        return twoStepDialog;
+    }
+
+    /** 对话框正文区是否带一个物品图标。 */
+    public boolean isDialogShowIcon() {
+        return dialogShowIcon;
     }
 
     // ------------------------------------------------------------------

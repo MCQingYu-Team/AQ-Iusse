@@ -5,14 +5,24 @@
 
 ```
 /iusse
- └─ 反馈对话框
-     ├─ 反馈分类   （下拉选择，来自 config.yml）
-     ├─ 标题       （单行输入）
-     ├─ 详细内容   （多行输入）
-     └─ 提交 ──┬──► GitHub   │ PAT → 新建 Issue
-               ├──► Discord  │ 频道 Webhook
-               └──► QQ 群    │ OneBot 反向 WebSocket
+ └─ ① 选分类          ┌ 每类一个按钮，鼠标悬停显示说明
+     │ Bug 反馈  功能建议 │
+     │ 举报投诉  其它问题 │        取消
+     ↓
+    ② 填写
+     │ 标题       （单行输入）
+     │ 详细内容   （多行输入）
+     ↓
+    提交 ──┬──► GitHub   │ PAT → 新建 Issue
+           ├──► Discord  │ 频道 Webhook
+           └──► QQ 群    │ OneBot WebSocket，自动 @ 提交者
 ```
+
+两个页面都可以按 Esc 关闭，第二步的「返回」能回到上一步改分类。
+
+> [!NOTE]
+> 分类超过 6 个时按钮会挤成一团，插件会自动退回「下拉框 + 表单」的单页式。
+> 也可以在配置里用 `dialog.two-step: false` 强制单页式。
 
 投递完成后玩家会看到每个渠道各自的结果：
 
@@ -61,7 +71,7 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 
 | 能力 | 说明 |
 | --- | --- |
-| 原生对话框 | 基于 Paper Dialog API，由客户端渲染，服务端零 GUI 开销，也不会和其他 GUI 插件抢界面 |
+| 原生对话框 | 基于 Paper Dialog API，由客户端渲染，服务端零 GUI 开销，也不会和其他 GUI 插件抢界面；两步式流程（点分类 → 填内容）比下拉框表单清爽得多 |
 | 单 jar 跨版本 | 一份产物覆盖 Paper 1.21.7 至最新版（含 26.x） |
 | 玩家零门槛 | 玩家不需要任何账号，服务器统一持有一个凭据 |
 | 来源可追溯 | 各渠道的消息都会带上玩家名、UUID、分类、服务端版本与提交时间 |
@@ -316,6 +326,10 @@ submit:
 tracking:
   # ……完整项见 config.yml
   rate-limit-threshold: 100  # 剩余额度低于此值就自动降低轮询频率，0 表示不降频
+
+dialog:                      # 对话框外观
+  two-step: true             # 先点分类按钮再填内容；false = 下拉框 + 表单单页式
+  show-icon: true            # 正文区带一个物品图标
 
 categories:                  # 对话框里的「反馈分类」下拉项
   - id: "bug"
