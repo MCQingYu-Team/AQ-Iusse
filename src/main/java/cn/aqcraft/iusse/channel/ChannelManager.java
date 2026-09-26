@@ -77,7 +77,10 @@ public class ChannelManager {
     }
 
     /**
-     * 在异步线程里依次投递到所有通道，全部结束后回主线程回调。
+     * 在异步线程里依次投递到所有渠道，全部结束后回主线程回调。
+     * <p>
+     * 刻意使用固定顺序 {@code github → discord → onebot}：GitHub 先跑并拿到 Issue 地址，
+     * 后续渠道就能把它写进消息里。某个渠道失败不会影响其余渠道。
      *
      * @param callback 主线程回调，参数是每个通道的结果
      */
@@ -88,13 +91,19 @@ public class ChannelManager {
             public void run() {
                 final List<ChannelResult> results = new ArrayList<ChannelResult>(targets.size());
                 for (Channel channel : targets) {
+                    ChannelResult result;
                     try {
-                        results.add(ChannelResult.success(channel, channel.submit(submission)));
+                        result = channel.submit(submission);
                     } catch (Throwable throwable) {
-                        results.add(ChannelResult.failure(channel, describe(throwable)));
+                        result = ChannelResult.failure(channel, describe(throwable));
                         plugin.getLogger().warning("渠道 " + channel.getId() + " 投递失败："
                                 + throwable.getClass().getSimpleName() + ": " + throwable.getMessage());
                     }
+                    String link = result.getLink();
+                    if (link != null && !link.isEmpty()) {
+                        submission.addLink(link);
+                    }
+                    results.add(result);
                 }
                 Bukkit.getScheduler().runTask(plugin, new Runnable() {
                     @Override

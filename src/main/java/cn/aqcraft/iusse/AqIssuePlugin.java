@@ -206,6 +206,8 @@ public class AqIssuePlugin extends JavaPlugin {
         send(player, "submit.submitting");
 
         boolean withPlayer = pluginConfig.isIncludePlayerInfo();
+        String fallbackLink = pluginConfig.isGitHubEnabled() && pluginConfig.isRepoConfigured()
+                ? pluginConfig.getRepoUrl() : null;
         Submission submission = new Submission(
                 withPlayer ? player.getName() : null,
                 withPlayer ? player.getUniqueId().toString() : null,
@@ -215,7 +217,8 @@ public class AqIssuePlugin extends JavaPlugin {
                 Text.oneLine(pluginConfig.getTitlePrefix() + title),
                 body,
                 pluginConfig.isIncludeServerInfo() ? Bukkit.getName() + " " + Bukkit.getVersion() : null,
-                new Date());
+                new Date(),
+                fallbackLink);
 
         final UUID playerId = player.getUniqueId();
         final String playerName = player.getName();

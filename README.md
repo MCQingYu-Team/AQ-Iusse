@@ -18,10 +18,29 @@
 
 ```
 [AQIssue] 提交成功！投递结果：
- ▶ GitHub - Issue #12  https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
+ ▶ GitHub - Issue #12
  ▶ Discord - 已发送到 Discord
  ▶ QQ 群 - 已发送到 1 个 QQ 群
 ```
+
+QQ 群里收到的消息（末尾会自动带上刚创建的 Issue 地址）：
+
+```
+【Bug 反馈】服务器卡顿
+玩家：xcbro
+分类：Bug 反馈
+服务端：Paper 26.2 (git-Paper-xxx)
+时间：2026-09-26 22:15:03
+——————
+在主城放方块的时候会卡一下，大概持续两秒
+
+https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
+```
+
+> [!NOTE]
+> 渠道是按 `GitHub → Discord → QQ` 的顺序投递的，所以 Discord 和 QQ 的消息里能带上
+> GitHub 刚创建的 Issue 链接（Discord 里还会把这个链接挂在 Embed 标题上）。
+> 如果 GitHub 渠道没启用或投递失败，消息末尾会退而显示仓库地址；正文超长时只截断正文，链接必定保留。
 
 ## 支持渠道
 

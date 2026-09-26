@@ -76,7 +76,7 @@ public class DiscordChannel implements Channel {
     }
 
     @Override
-    public String submit(Submission submission) throws IOException {
+    public ChannelResult submit(Submission submission) throws IOException {
         Map<String, Object> embed = new LinkedHashMap<String, Object>();
         embed.put("title", Text.truncate(submission.getTitle(), MAX_TITLE));
         embed.put("description", Text.truncate(submission.toPlainText(), MAX_DESCRIPTION));
@@ -84,6 +84,11 @@ public class DiscordChannel implements Channel {
         embed.put("timestamp", submission.getIsoTime());
         embed.put("footer", Collections.singletonMap("text",
                 Text.truncate("AQIssue | " + submission.getCategoryName(), MAX_FOOTER)));
+        // 有链接时把标题变成可点击的跳转
+        String link = submission.getPrimaryLink();
+        if (link != null) {
+            embed.put("url", link);
+        }
 
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         String username = config.getDiscordUsername();
@@ -97,7 +102,7 @@ public class DiscordChannel implements Channel {
 
         // Discord Webhook 成功时返回 204 No Content
         if (response.getCode() == 204 || response.isSuccess()) {
-            return "已发送到 Discord";
+            return ChannelResult.success(this, "已发送到 Discord");
         }
         throw new IOException(describeError(response));
     }

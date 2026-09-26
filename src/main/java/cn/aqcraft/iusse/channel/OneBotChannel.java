@@ -258,7 +258,7 @@ public class OneBotChannel implements Channel {
     // ------------------------------------------------------------------
 
     @Override
-    public String submit(Submission submission) throws IOException {
+    public ChannelResult submit(Submission submission) throws IOException {
         Connection connection = pickConnection();
         if (connection == null) {
             throw new IOException("当前没有 OneBot 客户端连接（请检查 NapCat 的反向 WS 配置）");
@@ -285,7 +285,7 @@ public class OneBotChannel implements Channel {
         if (sent == 0) {
             throw new IOException(lastError == null ? "OneBot 未返回结果" : lastError);
         }
-        return "已发送到 " + sent + " 个 QQ 群";
+        return ChannelResult.success(this, "已发送到 " + sent + " 个 QQ 群");
     }
 
     @Override
@@ -306,10 +306,25 @@ public class OneBotChannel implements Channel {
         return null;
     }
 
+    /**
+     * 拼装群消息。
+     * <p>
+     * 正文超长时只截断正文，末尾的链接一定要保住 —— 否则玩家看不到 Issue 地址。
+     */
     private String buildMessage(Submission submission) {
-        String header = "【" + submission.getCategoryName() + "】" + submission.getTitle();
-        String text = header + "\n" + submission.toPlainText();
-        return Text.truncate(text, MAX_MESSAGE_LENGTH);
+        StringBuilder suffix = new StringBuilder();
+        for (String link : submission.getLinks()) {
+            suffix.append('\n').append(link);
+        }
+
+        String header = "【" + submission.getCategoryName() + "】" + submission.getTitle() + "\n";
+        String content = header + submission.toPlainText(false);
+
+        int budget = MAX_MESSAGE_LENGTH - suffix.length();
+        if (budget < 64) {
+            budget = 64;
+        }
+        return Text.truncate(content, budget) + suffix;
     }
 
     private Map<String, Object> call(Connection connection, String action,

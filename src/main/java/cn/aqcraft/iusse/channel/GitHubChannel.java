@@ -87,7 +87,7 @@ public class GitHubChannel implements Channel {
     }
 
     @Override
-    public String submit(Submission submission) throws IOException {
+    public ChannelResult submit(Submission submission) throws IOException {
         String credential = resolveCredential();
 
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
@@ -112,9 +112,9 @@ public class GitHubChannel implements Channel {
             if (issueUrl == null) {
                 issueUrl = config.getRepoUrl() + "/issues/" + number;
             }
-            return "Issue #" + number + "  " + issueUrl;
+            return ChannelResult.success(this, "Issue #" + number, issueUrl);
         } catch (RuntimeException e) {
-            return "已创建，但无法解析响应";
+            return ChannelResult.success(this, "已创建，但无法解析响应");
         }
     }
 

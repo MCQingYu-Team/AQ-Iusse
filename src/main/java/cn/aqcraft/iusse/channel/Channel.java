@@ -28,11 +28,14 @@ public interface Channel {
 
     /**
      * 同步投递一条反馈。
+     * <p>
+     * 渠道按 {@code github → discord → onebot} 的顺序逐个执行，
+     * 因此后面的渠道可以通过 {@link Submission#getLinks()} 拿到前面渠道产生的链接
+     * （典型场景：QQ 群消息里带上刚创建的 GitHub Issue 地址）。
      *
-     * @return 成功时的细节描述（如 Issue 链接），会展示给玩家
-     * @throws Exception 投递失败，异常信息会展示给玩家
+     * @return 投递结果；失败请直接抛异常，由调用方统一汇总
      */
-    String submit(Submission submission) throws Exception;
+    ChannelResult submit(Submission submission) throws Exception;
 
     /** 连通性检查（/iusse status）。 */
     String checkStatus() throws Exception;
