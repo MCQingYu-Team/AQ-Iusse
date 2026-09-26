@@ -95,6 +95,35 @@ channels:
     timeout-millis: 8000
 
 # ------------------------------------------------------------
+# 反馈跟踪（GitHub Issue 状态回传 + 处理超时提醒）
+# ------------------------------------------------------------
+# 需要 GitHub 渠道可用（PAT）才能查询 Issue 状态，否则本段自动跳过。
+tracking:
+  enabled: true
+  # 轮询间隔（分钟）
+  interval-minutes: 10
+  # 每轮最多查询多少个 Issue，用来控制 API 用量
+  max-per-run: 10
+  # 只跟踪最近多少天内提交的反馈
+  keep-days: 30
+  # Issue 被关闭时通知当初提交的玩家
+  notify-on-close: true
+  # Issue 有新评论时通知当初提交的玩家
+  notify-on-comment: true
+  # 玩家离线时把通知存起来，等他上线补发（false 则直接丢弃）
+  queue-offline: true
+
+  # 处理超时提醒（SLA）
+  sla:
+    enabled: true
+    # 超过多少小时仍未关闭就提醒管理员
+    hours: 24
+    # 同一个 Issue 的重复提醒间隔（小时）
+    repeat-hours: 24
+    # 除控制台外，是否也发到已启用的渠道（QQ 群 / Discord）
+    broadcast: true
+
+# ------------------------------------------------------------
 # 提交限制
 # ------------------------------------------------------------
 submit:

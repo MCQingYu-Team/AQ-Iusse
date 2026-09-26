@@ -15,13 +15,16 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import cn.aqcraft.iusse.channel.ChannelManager;
 import cn.aqcraft.iusse.channel.ChannelResult;
+import cn.aqcraft.iusse.channel.GitHubChannel;
 import cn.aqcraft.iusse.channel.Submission;
 import cn.aqcraft.iusse.command.IssueCommand;
 import cn.aqcraft.iusse.config.Category;
 import cn.aqcraft.iusse.config.LangConfig;
 import cn.aqcraft.iusse.config.PluginConfig;
 import cn.aqcraft.iusse.dialog.FeedbackDialog;
+import cn.aqcraft.iusse.listener.PlayerJoinListener;
 import cn.aqcraft.iusse.session.CooldownManager;
+import cn.aqcraft.iusse.tracking.IssueTracker;
 import cn.aqcraft.iusse.util.Text;
 
 /**
@@ -36,6 +39,7 @@ public class AqIssuePlugin extends JavaPlugin {
     private CooldownManager cooldownManager;
     private ChannelManager channelManager;
     private FeedbackDialog feedbackDialog;
+    private IssueTracker issueTracker;
 
     @Override
     public void onEnable() {
@@ -46,6 +50,9 @@ public class AqIssuePlugin extends JavaPlugin {
         this.cooldownManager = new CooldownManager();
         this.channelManager = new ChannelManager(this);
         this.feedbackDialog = new FeedbackDialog(this);
+        this.issueTracker = new IssueTracker(this);
+
+        getServer().getPluginManager().registerEvents(new PlayerJoinListener(this), this);
 
         PluginCommand command = getCommand("iusse");
         if (command != null) {
@@ -60,6 +67,7 @@ public class AqIssuePlugin extends JavaPlugin {
         }
 
         channelManager.reload();
+        issueTracker.start();
 
         // 每小时清理一次已过期的冷却记录
         getServer().getScheduler().runTaskTimer(this, new Runnable() {
@@ -74,6 +82,9 @@ public class AqIssuePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (issueTracker != null) {
+            issueTracker.stop();
+        }
         if (channelManager != null) {
             channelManager.stopAll();
         }
@@ -102,6 +113,7 @@ public class AqIssuePlugin extends JavaPlugin {
         lang.load();
         cooldownManager.clear();
         channelManager.reload();
+        issueTracker.reschedule();
         logStartupSummary();
     }
 
@@ -225,12 +237,13 @@ public class AqIssuePlugin extends JavaPlugin {
         channelManager.submitAll(submission, new java.util.function.Consumer<List<ChannelResult>>() {
             @Override
             public void accept(List<ChannelResult> results) {
-                handleResults(playerId, playerName, category, results);
+                handleResults(playerId, playerName, category, submission, results);
             }
         });
     }
 
-    private void handleResults(UUID playerId, String playerName, Category category, List<ChannelResult> results) {
+    private void handleResults(UUID playerId, String playerName, Category category,
+                               Submission submission, List<ChannelResult> results) {
         boolean anySuccess = false;
         StringBuilder log = new StringBuilder();
         for (ChannelResult result : results) {
@@ -246,6 +259,7 @@ public class AqIssuePlugin extends JavaPlugin {
 
         if (anySuccess) {
             cooldownManager.markSubmitted(playerId);
+            trackIssue(submission, results);
         }
         getLogger().info("玩家 " + playerName + "，分类 " + category.getId() + " -> " + log);
 
@@ -263,6 +277,41 @@ public class AqIssuePlugin extends JavaPlugin {
             player.sendMessage(lang.text(result.isSuccess() ? "submit.result-line-ok" : "submit.result-line-fail",
                     "channel", result.getDisplayName(),
                     "detail", result.getDetail()));
+        }
+    }
+
+    /** 把刚创建成功的 Issue 交给跟踪器，用于后续的状态回传与超时提醒。 */
+    private void trackIssue(Submission submission, List<ChannelResult> results) {
+        if (submission == null || !pluginConfig.isTrackingEnabled()) {
+            return;
+        }
+        for (ChannelResult result : results) {
+            if (!result.isSuccess() || !GitHubChannel.ID.equals(result.getChannelId())) {
+                continue;
+            }
+            String link = result.getLink();
+            int number = parseIssueNumber(link);
+            if (number > 0) {
+                issueTracker.track(number, link,
+                        submission.getPlayerUuid(), submission.getPlayerName(),
+                        submission.getTitle(), submission.getCategoryName());
+            }
+        }
+    }
+
+    /** 从 Issue 链接末尾取编号。 */
+    private static int parseIssueNumber(String link) {
+        if (link == null) {
+            return 0;
+        }
+        int index = link.lastIndexOf('/');
+        if (index < 0 || index == link.length() - 1) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(link.substring(index + 1).trim());
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 
@@ -296,6 +345,11 @@ public class AqIssuePlugin extends JavaPlugin {
 
     public ChannelManager getChannelManager() {
         return channelManager;
+    }
+
+    /** 反馈跟踪器（Issue 状态回传与超时提醒）。 */
+    public IssueTracker getIssueTracker() {
+        return issueTracker;
     }
 
     /** 记录并输出异常，避免异步任务里的异常被吞掉。 */

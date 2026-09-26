@@ -63,6 +63,19 @@ public class PluginConfig {
     private List<Long> onebotPrivateIds;
     private long onebotTimeoutMillis;
 
+    // 反馈跟踪（Issue 状态回传 + SLA 提醒）
+    private boolean trackingEnabled;
+    private int trackingIntervalMinutes;
+    private int trackingMaxPerRun;
+    private int trackingKeepDays;
+    private boolean trackingQueueOffline;
+    private boolean notifyOnClose;
+    private boolean notifyOnComment;
+    private boolean slaEnabled;
+    private int slaHours;
+    private int slaRepeatHours;
+    private boolean slaBroadcast;
+
     // 分类
     private List<Category> categories;
 
@@ -123,6 +136,18 @@ public class PluginConfig {
             onebotPrivateIds = Collections.emptyList();
         }
         onebotTimeoutMillis = Math.max(1000L, config.getLong("channels.onebot.timeout-millis", 8000L));
+
+        trackingEnabled = config.getBoolean("tracking.enabled", true);
+        trackingIntervalMinutes = Math.max(1, config.getInt("tracking.interval-minutes", 10));
+        trackingMaxPerRun = Math.max(1, config.getInt("tracking.max-per-run", 10));
+        trackingKeepDays = Math.max(1, config.getInt("tracking.keep-days", 30));
+        trackingQueueOffline = config.getBoolean("tracking.queue-offline", true);
+        notifyOnClose = config.getBoolean("tracking.notify-on-close", true);
+        notifyOnComment = config.getBoolean("tracking.notify-on-comment", true);
+        slaEnabled = config.getBoolean("tracking.sla.enabled", true);
+        slaHours = Math.max(1, config.getInt("tracking.sla.hours", 24));
+        slaRepeatHours = Math.max(1, config.getInt("tracking.sla.repeat-hours", 24));
+        slaBroadcast = config.getBoolean("tracking.sla.broadcast", true);
 
         categories = readCategories(config);
     }
@@ -246,6 +271,61 @@ public class PluginConfig {
 
     public List<Category> getCategories() {
         return categories;
+    }
+
+    // ------------------------------------------------------------------
+    // 反馈跟踪
+    // ------------------------------------------------------------------
+
+    public boolean isTrackingEnabled() {
+        return trackingEnabled;
+    }
+
+    /** 轮询间隔（分钟）。 */
+    public int getTrackingIntervalMinutes() {
+        return trackingIntervalMinutes;
+    }
+
+    /** 每轮最多查询多少个 Issue。 */
+    public int getTrackingMaxPerRun() {
+        return trackingMaxPerRun;
+    }
+
+    /** 只跟踪最近多少天内提交的反馈。 */
+    public int getTrackingKeepDays() {
+        return trackingKeepDays;
+    }
+
+    /** 玩家离线时是否把通知排队、等他上线补发。 */
+    public boolean isTrackingQueueOffline() {
+        return trackingQueueOffline;
+    }
+
+    public boolean isNotifyOnClose() {
+        return notifyOnClose;
+    }
+
+    public boolean isNotifyOnComment() {
+        return notifyOnComment;
+    }
+
+    public boolean isSlaEnabled() {
+        return slaEnabled;
+    }
+
+    /** 超过多少小时未处理就提醒管理员。 */
+    public int getSlaHours() {
+        return slaHours;
+    }
+
+    /** 同一 Issue 的重复提醒间隔（小时）。 */
+    public int getSlaRepeatHours() {
+        return slaRepeatHours;
+    }
+
+    /** 除控制台外，是否也把超时提醒发到已启用的渠道。 */
+    public boolean isSlaBroadcast() {
+        return slaBroadcast;
     }
 
     // ------------------------------------------------------------------

@@ -8,7 +8,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -441,6 +440,40 @@ public class OneBotChannel implements Channel {
             return "已监听 " + config.getOneBotBind() + ":" + config.getOneBotPort() + "，但暂无客户端连接";
         }
         return count + " 个 OneBot 客户端已连接";
+    }
+
+    /** 向群与私聊目标推送系统通知（如 SLA 超时提醒）。 */
+    @Override
+    public boolean notifyAdmins(String message) {
+        Connection connection = pickConnection();
+        if (connection == null) {
+            return false;
+        }
+        boolean delivered = false;
+        for (Long groupId : config.getOneBotGroupIds()) {
+            if (sendTo(connection, "send_group_msg", "group_id", groupId, message)) {
+                delivered = true;
+            }
+        }
+        for (Long userId : config.getOneBotPrivateIds()) {
+            if (sendTo(connection, "send_private_msg", "user_id", userId, message)) {
+                delivered = true;
+            }
+        }
+        return delivered;
+    }
+
+    /** 发一条纯文本消息，失败不抛异常（通知类消息不重试）。 */
+    private boolean sendTo(Connection connection, String action, String idField, long id, String message) {
+        Map<String, Object> params = new LinkedHashMap<String, Object>();
+        params.put(idField, id);
+        params.put("message", message);
+        try {
+            return isOk(call(connection, action, params, config.getOneBotTimeoutMillis()));
+        } catch (IOException e) {
+            plugin.getLogger().fine("OneBot 通知发送失败（" + idField + "=" + id + "）：" + e.getMessage());
+            return false;
+        }
     }
 
     private Connection pickConnection() {

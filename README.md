@@ -60,6 +60,7 @@ https://github.com/MCQingYu-Team/AQ-Iusse/issues/12
 | 单 jar 跨版本 | 一份产物覆盖 Paper 1.21.7 至最新版（含 26.x） |
 | 玩家零门槛 | 玩家不需要任何账号，服务器统一持有一个凭据 |
 | 来源可追溯 | 各渠道的消息都会带上玩家名、UUID、分类、服务端版本与提交时间 |
+| 反馈闭环 | Issue 被关闭或有人评论时通知提交者；长时间未处理会自动提醒管理员 |
 | 单语言文件 | 所有面向玩家的文案都在 `lang.yml`，改文案不用碰代码和 `config.yml` |
 | 零第三方依赖 | HTTP 用 `HttpURLConnection`、JSON 自写、WebSocket 服务端自写，无任何外部依赖 |
 
@@ -194,6 +195,50 @@ channels:
 > `mode: client` 且 URL 指向公网时，**`access-token` 是唯一的门禁**，务必用足够长的随机串
 > （`openssl rand -hex 16`），别用能被猜到的值 —— 否则任何人都能往你的群里发消息。
 
+## 反馈跟踪与超时提醒
+
+插件会记住每一条提交出去的 Issue，按 `tracking.interval-minutes` 定期查询它的状态。
+
+**状态回传给玩家** —— Issue 被关闭、或有人评论时，当初提交的玩家会在游戏内收到通知：
+
+```
+[AQIssue] 你提交的反馈已被处理：服务器卡顿
+         https://github.com/MCQingYu-Team/QY-SERVER-IUSSE/issues/12
+```
+
+玩家不在线时通知会排队，等他上线自动补发（关掉 `tracking.queue-offline` 则直接丢弃）。
+
+**超时提醒管理员** —— Issue 超过 `tracking.sla.hours` 小时仍未关闭时，控制台与已启用的渠道（QQ 群 / Discord）会收到提醒：
+
+```
+[AQIssue] [反馈超时] 以下反馈已提交超过 24 小时仍未处理：
+ #12 服务器卡顿 (Bug 反馈) 已等待 26 小时
+ 处理地址：https://github.com/MCQingYu-Team/QY-SERVER-IUSSE/issues/12
+```
+
+提醒按 `repeat-hours` 间隔重复，直到 Issue 被关闭。
+
+```yaml
+tracking:
+  enabled: true
+  interval-minutes: 10      # 轮询间隔
+  max-per-run: 10           # 每轮最多查几个 Issue（控制 API 用量）
+  keep-days: 30             # 只跟踪最近 30 天提交的
+  notify-on-close: true
+  notify-on-comment: true
+  queue-offline: true
+  sla:
+    enabled: true
+    hours: 24               # 超过 24 小时算超时
+    repeat-hours: 24        # 每 24 小时重复提醒一次
+    broadcast: true         # 除控制台外也发到 QQ / Discord
+```
+
+> [!NOTE]
+> 跟踪记录存在 `plugins/AQIssue/issues.json`，重启后不会重复通知同一条。
+> 轮询走 GitHub API，每轮最多 `max-per-run` 次请求 —— 相对 5000/小时的限额可以忽略不计。
+> 本段需要 GitHub 渠道可用（有 PAT），否则自动跳过。
+
 ## 配置总览
 
 ```yaml
@@ -297,7 +342,11 @@ src/main/java/cn/aqcraft/iusse/
 │   ├─ Http.java                   共用 HTTP 客户端
 │   └─ WebSocketConnection.java    手写 WebSocket 连接（服务端 + 客户端）
 ├─ config/                         PluginConfig / LangConfig / Category
+├─ tracking/
+│   ├─ IssueRecord.java            单条跟踪记录
+│   └─ IssueTracker.java           Issue 状态轮询、回传玩家、超时提醒
 ├─ session/CooldownManager.java    提交冷却
+├─ listener/PlayerJoinListener.java 上线补发离线通知
 └─ util/Text.java                  颜色代码处理
 ```
 

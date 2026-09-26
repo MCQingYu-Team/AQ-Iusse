@@ -173,6 +173,25 @@ public final class MiniJson {
         return fallback;
     }
 
+    /** 安全地从对象里取长整数字段（时间戳等超出 int 范围的值要用它）。 */
+    public static long longValue(Map<String, Object> map, String key, long fallback) {
+        if (map == null) {
+            return fallback;
+        }
+        Object value = map.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            try {
+                return Long.parseLong(((String) value).trim());
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
+        }
+        return fallback;
+    }
+
     private static final class Parser {
 
         private final String text;

@@ -120,6 +120,25 @@ public class DiscordChannel implements Channel {
         return "Webhook 已配置";
     }
 
+    /** 向频道推送一条纯文本系统通知（如 SLA 超时提醒）。 */
+    @Override
+    public boolean notifyAdmins(String message) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            String username = config.getDiscordUsername();
+            if (!username.isEmpty()) {
+                payload.put("username", Text.truncate(username, 80));
+            }
+            payload.put("content", Text.truncate(Text.plain(message), MAX_DESCRIPTION));
+
+            Http.Response response = Http.postJson(config.getDiscordWebhookUrl(), null,
+                    MiniJson.write(payload), config.getTimeoutMillis(), proxy);
+            return response.getCode() == 204 || response.isSuccess();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private String describeError(Http.Response response) {
         String detail = null;
         try {

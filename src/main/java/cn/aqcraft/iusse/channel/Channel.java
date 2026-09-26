@@ -39,4 +39,17 @@ public interface Channel {
 
     /** 连通性检查（/iusse status）。 */
     String checkStatus() throws Exception;
+
+    /**
+     * 向管理员推送一条系统通知（例如反馈处理超时提醒）。
+     * <p>
+     * 与 {@link #submit(Submission)} 不同，这里发的是服务端自己要说的话，
+     * 不携带玩家反馈内容。不支持的渠道用默认实现（直接返回 false）即可。
+     *
+     * @param message 已上色的纯文本消息
+     * @return 是否至少送达一个目标
+     */
+    default boolean notifyAdmins(String message) {
+        return false;
+    }
 }
